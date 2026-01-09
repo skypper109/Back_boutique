@@ -15,8 +15,11 @@ abstract class Controller
         $user = Auth::user();
         if (!$user) return null;
 
-        if ($user->role === 'admin' && request()->header('X-Boutique-Id')) {
-            return request()->header('X-Boutique-Id');
+        $headerBoutiqueId = request()->header('X-Boutique-Id');
+
+        // Priorité au header si présent et non vide
+        if ($headerBoutiqueId && $headerBoutiqueId !== 'null' && $headerBoutiqueId !== '') {
+            return $headerBoutiqueId;
         }
 
         return $user->boutique_id;

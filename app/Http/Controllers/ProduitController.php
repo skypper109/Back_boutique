@@ -172,7 +172,7 @@ class ProduitController extends Controller
             'nom' => 'required|string|max:255',
             'categorie_id' => 'required|integer',
             'description' => 'nullable|string',
-            // 'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:10048',
             'quantite' => 'required|integer',
             'prixVente' => 'required|numeric',
             'prixAchat' => 'required|numeric',
@@ -274,30 +274,135 @@ class ProduitController extends Controller
      */
     public function update(Request $request, Produit $produit)
     {
-        //Pour la modification d'un produit uniquement le nom et la description et l'id:
+        //Pour la modification d'un produit (Nom, Description, Categorie)
         $request->validate([
             'nom' => 'string|max:255',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:10048',
-            'description' => 'nullable|string'
+            'description' => 'nullable|string',
+            'categorie_id' => 'integer',
+            // Optionnel : Mise à jour du stock
+            'prix_vente' => 'nullable|numeric',
+            'prix_achat' => 'nullable|numeric',
+            'quantite' => 'nullable|integer'
         ]);
+
+        $data = [
+            'nom' => $request->input('nom', $produit->nom),
+            'description' => $request->input('description', $produit->description),
+            'categorie_id' => $request->input('categorie_id', $produit->categorie_id),
+        ];
+
         if ($request->hasFile('image')) {
             $fileName = time() . '_' . $request->file('image')->getClientOriginalName();
             $chemin = $request->file('image')->storeAs('produit', $fileName, 'public');
-            $produit->update([
-                'nom' => $request->input('nom'),
-                'description' => $request->input('description'),
-                'categorie_id' => $request->input('categorie_id'),
-                'image' => asset('storage/' . $chemin)
-            ]);
-            return response()->json(['message' => 'Produit modifié avec succès'], 200);
-        } else {
-            $produit->update([
-                'nom' => $request->input('nom'),
-                'description' => $request->input('description'),
-                'categorie_id' => $request->input('categorie_id')
-            ]);
-            return response()->json(['message' => 'Produit modifié avec succès'], 200);
+            $data['image'] = asset('storage/' . $chemin);
         }
+
+        $produit->update($data);
+
+        // Mise à jour du stock pour la boutique actuelle
+        $boutique_id = $this->getBoutiqueId();
+        if ($request->has('prix_vente') || $request->has('prix_achat') || $request->has('quantite')) {
+            $stock = Stock::where('produit_id', $produit->id)->where('boutique_id', $boutique_id)->first();
+            if ($stock) {
+                $stock->update([
+                    'prix_vente' => $request->input('prix_vente', $stock->prix_vente),
+                    'prix_achat' => $request->input('prix_achat', $stock->prix_achat),
+                    'quantite' => $request->input('quantite', $stock->quantite),
+                ]);
+            } else {
+                Stock::create([
+                    'produit_id' => $produit->id,
+                    'boutique_id' => $boutique_id,
+                    'quantite' => $request->input('quantite', 0),
+                    'prix_achat' => $request->input('prix_achat', 0),
+                    'prix_vente' => $request->input('prix_vente', 0),
+                ]);
+            }
+        }
+
+        return response()->json(['message' => 'Produit modifié avec succès', 'produit' => $produit], 200);
+    }
+
+    public function summary()
+    {
+        $boutique_id = $this->getBoutiqueId();
+
+        $produit_count = Stock::where('boutique_id', $boutique_id)->where('quantite', '>', 0)->count();
+        $total_stock = Stock::where('boutique_id', $boutique_id)
+            ->selectRaw('SUM(quantite * prix_vente) as total')
+            ->first()->total ?? 0;
+
+        $ventes_jour = DB::table('ventes')
+            ->where('boutique_id', $boutique_id)
+            ->where('statut', 'validee')
+            ->whereDate('date_vente', Carbon::today())
+            ->count();
+
+        $categorie_count = \App\Models\Categorie::where('boutique_id', $boutique_id)
+            ->orWhereNull('boutique_id')
+            ->count();
+
+        return response()->json([
+            'produit_count' => $produit_count,
+            'total_stock' => (float)$total_stock,
+            'ventes_jour' => $ventes_jour,
+            'categorie_count' => $categorie_count,
+            'annee_active' => now()->year
+        ], 200);
+    }
+
+    public function importCSV(Request $request)
+    {
+        $request->validate([
+            'file' => 'required|file|mimes:csv,txt'
+        ]);
+
+        $file = $request->file('file');
+        $handle = fopen($file->getRealPath(), 'r');
+        $headers = fgetcsv($handle, 0, ';'); // Assuming semicolon separator
+
+        // Expected headers: nom;categorie_id;prix_achat;prix_vente;quantite;description
+
+        $user = Auth::user();
+        $boutique_id = $this->getBoutiqueId();
+        $count = 0;
+
+        while (($row = fgetcsv($handle, 0, ';')) !== false) {
+            $data = array_combine($headers, $row);
+
+            $produit = Produit::create([
+                'nom' => $data['nom'],
+                'categorie_id' => $data['categorie_id'],
+                'description' => $data['description'] ?? '',
+                'image' => asset('storage/produit/default.png')
+            ]);
+
+            Stock::create([
+                'produit_id' => $produit->id,
+                'boutique_id' => $boutique_id,
+                'quantite' => $data['quantite'],
+                'prix_achat' => $data['prix_achat'],
+                'prix_vente' => $data['prix_vente'],
+                'date_reapprovisionnement' => now()->format('Y-m-d')
+            ]);
+
+            Inventaire::create([
+                'produit_id' => $produit->id,
+                'boutique_id' => $boutique_id,
+                'user_id' => $user->id,
+                'quantite' => $data['quantite'],
+                'type' => 'ajout',
+                'description' => "Importation CSV",
+                'date' => now()->format('Y-m-d')
+            ]);
+
+            $count++;
+        }
+
+        fclose($handle);
+
+        return response()->json(['message' => "$count produits importés avec succès"], 201);
     }
 
     /**
@@ -305,8 +410,42 @@ class ProduitController extends Controller
      */
     public function destroy(Produit $produit)
     {
-        //Pour la suppression d'un produit:
+        //Pour la suppression d'un produit (Soft Delete enabled):
         $produit->delete();
-        return response()->json(['message' => 'Produit supprimé avec succès'], 200);
+        return response()->json(['message' => 'Produit déplacé vers la corbeille'], 200);
+    }
+
+    public function trashed()
+    {
+        $boutique_id = $this->getBoutiqueId();
+        $produits = Produit::onlyTrashed()
+            ->with(['categorie', 'stock' => function ($query) use ($boutique_id) {
+                $query->where('boutique_id', $boutique_id);
+            }])
+            ->whereHas('stock', function ($query) use ($boutique_id) {
+                $query->where('boutique_id', $boutique_id);
+            })
+            ->orderBy('deleted_at', 'desc')->get();
+
+        return response()->json($produits, 200);
+    }
+
+    public function restore(Request $request, $id)
+    {
+        $produit = Produit::onlyTrashed()->findOrFail($id);
+        $produit->restore();
+
+        if ($request->has('quantite')) {
+            $boutique_id = $this->getBoutiqueId();
+            $stock = Stock::where('produit_id', $id)->where('boutique_id', $boutique_id)->first();
+            if ($stock) {
+                $stock->update([
+                    'quantite' => $request->quantite,
+                    'date_reapprovisionnement' => now()->format('Y-m-d')
+                ]);
+            }
+        }
+
+        return response()->json(['message' => 'Produit restauré avec succès'], 200);
     }
 }

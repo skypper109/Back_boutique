@@ -2,7 +2,24 @@
 
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use App\Models\User;
+use Illuminate\Support\Facades\Hash;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
-})->purpose('Display an inspiring quote')->hourly();
+})->purpose('Display an inspiring quote');
+
+Artisan::command('auth:create-super-admin', function () {
+    $email = 'admin@maboutique.com';
+    if (!User::where('email', $email)->exists()) {
+        User::create([
+            'name' => 'Super Admin',
+            'email' => $email,
+            'password' => Hash::make('admin123'), // Change this in production
+            'role' => 'admin', // Ensure this role exists in your seeding
+        ]);
+        $this->info('Super Admin created successfully.');
+    } else {
+        $this->info('Super Admin already exists.');
+    }
+})->purpose('Create a Super Admin user')->hourly();

@@ -5,11 +5,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Laravel\Sanctum\HasApiTokens;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Produit extends Model
 {
-    use HasApiTokens;
-    use HasFactory;
+    use HasApiTokens, HasFactory, SoftDeletes;
     protected $guarded = [];
     // On definit la relation entre les produits et les categories
     public function categorie()

@@ -15,12 +15,12 @@ return [
     |
     */
 
-    'paths' => ['api/*', 'sanctum/csrf-cookie'],
+    'paths' => ['api/*', 'sanctum/csrf-cookie', 'admin/*', 'loginAdmin'],
 
-    'allowed_methods' => ['POST'],
+    'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['http://localhost:4200'],
-    'Access-Control-Allow-Methods' => ['POST', 'GET', 'PUT', 'DELETE', 'OPTIONS'],
+    'allowed_origins' => ['*'],
+
     'allowed_origins_patterns' => [],
 
     'allowed_headers' => ['*'],
@@ -29,6 +29,6 @@ return [
 
     'max_age' => 0,
 
-    'supports_credentials' => false,
+    'supports_credentials' => true,
 
 ];

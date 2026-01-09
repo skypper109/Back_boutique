@@ -28,6 +28,7 @@
             </thead>
             <tbody>
                 @foreach($admins as $admin)
+                @if($admin->role == 'admin' || $admin->role == 'super_admin')
                 <tr>
                     <td>
                         <div style="display: flex; align-items: center; gap: 12px;">
@@ -39,7 +40,7 @@
                     </td>
                     <td><span class="text-muted italic">{{ $admin->email }}</span></td>
                     <td style="text-align: center;">
-                        <span class="badge badge-blue">SUPER ADMIN</span>
+                        <span class="badge badge-blue">{{ $admin->role }}</span>
                     </td>
                     <td style="text-align: center;">
                         <span class="text-muted smaller">{{ $admin->created_at->format('d/m/Y') }}</span>
@@ -60,6 +61,8 @@
                         </div>
                     </td>
                 </tr>
+                @endif
+
                 @endforeach
             </tbody>
         </table>
@@ -131,5 +134,4 @@
         transform: translateY(-2px);
     }
 </style>
-@endsection
 @endsection

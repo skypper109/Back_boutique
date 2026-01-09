@@ -24,4 +24,9 @@ class Facture extends Model
     {
         return $this->belongsTo(Client::class);
     }
+
+    public function boutique()
+    {
+        return $this->belongsTo(Boutique::class);
+    }
 }

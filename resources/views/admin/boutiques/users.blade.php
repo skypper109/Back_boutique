@@ -234,4 +234,3 @@
     }
 </style>
 @endsection
-@endsection

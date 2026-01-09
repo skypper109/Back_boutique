@@ -12,8 +12,10 @@ class CategorieController extends Controller
      */
     public function index()
     {
-        // On retourne toutes les categories
-        $categories = Categorie::orderByDesc('id')->get();
+        $boutique_id = $this->getBoutiqueId();
+        $categories = Categorie::where('boutique_id', $boutique_id)
+            ->orWhereNull('boutique_id') // Allow global categories if any
+            ->orderByDesc('id')->get();
         return response()->json(data: $categories);
     }
 
@@ -34,9 +36,9 @@ class CategorieController extends Controller
         $categorie = new Categorie();
         $categorie->nom = $request->nom;
         $categorie->description = $request->description;
+        $categorie->boutique_id = $this->getBoutiqueId();
         $categorie->save();
         return response()->json(['message' => 'Categorie creee avec succes'], 201);
-
     }
 
     /**
@@ -48,7 +50,6 @@ class CategorieController extends Controller
 
 
         return response()->json($categorie);
-
     }
 
     /**

@@ -14,14 +14,11 @@ class FactureController extends Controller
      */
     public function index(Request $request, $annee = null)
     {
-        $user = Auth::user();
-        $boutique_id = $user->boutique_id;
+        $boutique_id = $this->getBoutiqueId();
 
         $query = DB::table('factures as f')
             ->join('clients as c', 'c.id', '=', 'f.client_id')
-            ->join('facture_ventes as fv', 'fv.facture_id', '=', 'f.id')
-            ->join('ventes as v', 'v.id', '=', 'fv.vente_id')
-            ->where('v.boutique_id', $boutique_id)
+            ->where('f.boutique_id', $boutique_id)
             ->select(
                 'f.id as idFacture',
                 'c.nom as nomClient',
@@ -45,7 +42,7 @@ class FactureController extends Controller
     public function detailFacture($IDfacture)
     {
         // Utilisation d'Eloquent pour plus de robustesse
-        $facture = Facture::with(['client', 'factureVentes.vente.detailVentes.produit'])
+        $facture = Facture::with(['client', 'factureVentes.vente.detailVentes.produit', 'factureVentes.vente.boutique'])
             ->where('id', $IDfacture)
             ->firstOrFail();
 
@@ -63,12 +60,19 @@ class FactureController extends Controller
             }
         }
 
+        // Récupérer le nom de la boutique depuis la première vente
+        $nomBoutique = 'Ma Boutique';
+        if ($facture->factureVentes->isNotEmpty() && $facture->factureVentes->first()->vente) {
+            $nomBoutique = $facture->factureVentes->first()->vente->boutique->nom ?? 'Ma Boutique';
+        }
+
         $response = [
             'nomClient' => $facture->client->nom,
             'numeroClient' => $facture->client->telephone,
             'adresseClient' => $facture->client->adresse ?? 'N/A',
             'dateFacture' => $facture->date_facturation,
             'montant_total' => $facture->montant_total,
+            'nomBoutique' => $nomBoutique,
             'produitAchat' => $produitAchat
         ];
 

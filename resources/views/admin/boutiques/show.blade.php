@@ -35,7 +35,10 @@
         :value="number_format($salesCount, 0, ',', ' ')"
         unit="Ventes" />
 
-    <div class="stat-card {{ $boutique->is_active ? 'gradient' : 'dark' }}" style="{{ !$boutique->is_active ? 'background: linear-gradient(135deg, #ef4444, #991b1b);' : '' }}">
+    @php
+    $cardStyle = !$boutique->is_active ? 'background: linear-gradient(135deg, #ef4444, #991b1b);' : '';
+    @endphp
+    <div class="stat-card {{ $boutique->is_active ? 'gradient' : 'dark' }}" >
         <p class="stat-label" style="opacity: 0.8;">État Opérationnel</p>
         <div class="stat-value">
             <h2 style="font-size: 1.5rem;">{{ $boutique->is_active ? 'BOUTIQUE OUVERTE' : 'ACCÈS BLOQUÉ' }}</h2>
@@ -136,5 +139,4 @@
         font-style: italic;
     }
 </style>
-@endsection
 @endsection

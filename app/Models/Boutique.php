@@ -14,8 +14,14 @@ class Boutique extends Model
         'adresse',
         'telephone',
         'email',
-        'is_active'
+        'is_active',
+        'user_id'
     ];
+
+    public function creator()
+    {
+        return $this->belongsTo(User::class, 'user_id');
+    }
 
     public function users()
     {

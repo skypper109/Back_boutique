@@ -558,6 +558,7 @@ class VenteController extends Controller
 
         $facture = new Facture();
         $facture->client_id = $client_id;
+        $facture->boutique_id = $boutique_id;
         $facture->montant_total = $request->montant_total;
         $facture->date_facturation = now()->format('Y-m-d');
         $facture->statut = $statutFacture;

@@ -9,9 +9,29 @@ use Illuminate\Routing\Controller;
 use App\Models\User;
 use App\Models\Vente;
 use App\Models\DetailVente;
+use Illuminate\Support\Facades\Auth;
 
 class BoutiqueController extends Controller
 {
+    public function allStats()
+    {
+        $boutiques = Boutique::all();
+        $reports = [];
+
+        foreach ($boutiques as $b) {
+            $reports[] = [
+                'id' => $b->id,
+                'nom' => $b->nom,
+                'revenue' => \App\Models\Vente::where('boutique_id', $b->id)->where('statut', 'validee')->sum('montant_total'),
+                'sales_count' => \App\Models\Vente::where('boutique_id', $b->id)->where('statut', 'validee')->count(),
+                'users_count' => \App\Models\User::where('boutique_id', $b->id)->count(),
+                'is_active' => $b->is_active
+            ];
+        }
+
+        return response()->json($reports, 200);
+    }
+
     public function stats(string $id)
     {
         $boutique = Boutique::findOrFail($id);
@@ -45,7 +65,16 @@ class BoutiqueController extends Controller
      */
     public function index()
     {
-        return response()->json(Boutique::all(), 200);
+        $user = Auth::user();
+        if ($user->role === 'admin') {
+            // Un admin voit toutes les boutiques qu'il a créées ou toutes les boutiques s'il est super-admin
+            // Pour l'instant, on retourne tout s'il est admin
+            return response()->json(Boutique::all(), 200);
+        }
+
+        // Pour les autres roles, peut-être filtrer ?
+        // Mais selon la demande, l'admin doit pouvoir switcher.
+        return response()->json(Boutique::where('id', $user->boutique_id)->get(), 200);
     }
 
     /**
@@ -59,6 +88,8 @@ class BoutiqueController extends Controller
             'telephone' => 'nullable|string',
             'email' => 'nullable|string|email'
         ]);
+
+        $fields['user_id'] = Auth::id();
 
         $boutique = Boutique::create($fields);
 

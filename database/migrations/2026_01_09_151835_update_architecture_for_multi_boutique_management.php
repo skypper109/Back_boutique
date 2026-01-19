@@ -4,6 +4,8 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
+use Illuminate\Support\Facades\DB;
+
 return new class extends Migration
 {
     /**
@@ -26,7 +28,7 @@ return new class extends Migration
         }
 
         // 3. Data Sync: Link existing factures to boutiques via their associated sales
-        \DB::statement("
+        DB::statement("
             UPDATE factures
             SET boutique_id = (
                 SELECT v.boutique_id
@@ -39,9 +41,9 @@ return new class extends Migration
         ");
 
         // 4. Fallback for orphans: Link to the first boutique if still null
-        $firstBoutique = \DB::table('boutiques')->first();
+        $firstBoutique = DB::table('boutiques')->first();
         if ($firstBoutique) {
-            \DB::table('factures')->whereNull('boutique_id')->update(['boutique_id' => $firstBoutique->id]);
+            DB::table('factures')->whereNull('boutique_id')->update(['boutique_id' => $firstBoutique->id]);
         }
     }
 

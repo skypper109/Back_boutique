@@ -40,16 +40,9 @@ class AuthController extends Controller
             }
         }
 
-        if ($user->boutique_id && $user->boutique && !$user->boutique->is_active) {
-            return response()->json([
-                'error' => 'Cette boutique est actuellement désactivée. Veuillez contacter l\'administrateur général.'
-            ], 403);
-        }
-
         if (!$user->is_active) {
-            return response()->json([
-                'error' => 'Votre compte est désactivé. Veuillez contacter le gestionnaire.'
-            ], 403);
+            // Optional: Log or handle inactive users differently if needed, 
+            // but here we allow them to proceed as per request.
         }
 
         $token = $user->createToken('auth_token')->plainTextToken;
@@ -159,6 +152,7 @@ class AuthController extends Controller
 
     public function toggleUserStatus($id)
     {
+        ['user'=>$id];
         $user = User::findOrFail($id);
         $user->is_active = !$user->is_active;
         $user->save();
@@ -167,7 +161,7 @@ class AuthController extends Controller
         if (!$user->is_active) {
             $user->tokens()->delete();
         }
-
+ 
         return response()->json([
             'message' => 'Statut utilisateur mis à jour',
             'is_active' => $user->is_active

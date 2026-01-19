@@ -15,7 +15,8 @@ class BoutiqueController extends Controller
 {
     public function allStats()
     {
-        $boutiques = Boutique::all();
+        $user = Auth::user();
+        $boutiques = Boutique::where('user_id',$user->id)->get();
         $reports = [];
 
         foreach ($boutiques as $b) {
@@ -66,15 +67,15 @@ class BoutiqueController extends Controller
     public function index()
     {
         $user = Auth::user();
-        if ($user->role === 'admin') {
-            // Un admin voit toutes les boutiques qu'il a créées ou toutes les boutiques s'il est super-admin
-            // Pour l'instant, on retourne tout s'il est admin
-            return response()->json(Boutique::all(), 200);
-        }
+        // if ($user->role === 'admin') {
+        //     // Un admin voit toutes les boutiques qu'il a créées ou toutes les boutiques s'il est super-admin
+        //     // Pour l'instant, on retourne tout s'il est admin
+        //     return response()->json(Boutique::all(), 200);
+        // }
 
         // Pour les autres roles, peut-être filtrer ?
         // Mais selon la demande, l'admin doit pouvoir switcher.
-        return response()->json(Boutique::where('id', $user->boutique_id)->get(), 200);
+        return response()->json(Boutique::where('user_id', $user->id)->get(), 200);
     }
 
     /**

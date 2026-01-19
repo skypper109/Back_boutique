@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class ProduitController extends Controller
 {
@@ -167,6 +168,11 @@ class ProduitController extends Controller
      */
     public function store(Request $request)
     {
+        $boutique_id = $this->getBoutiqueId();
+        if (!$boutique_id) {
+            return response()->json(['error' => 'Aucune boutique sélectionnée'], 400);
+        }
+
         //Pour la creation d'un nouveau produit:
         $request->validate([
             'nom' => 'required|string|max:255',
@@ -355,25 +361,39 @@ class ProduitController extends Controller
     public function importCSV(Request $request)
     {
         $request->validate([
-            'file' => 'required|file|mimes:csv,txt'
+            'file' => 'required|file|mimes:csv,txt',
+            'categorie_id' => 'required'
         ]);
 
         $file = $request->file('file');
         $handle = fopen($file->getRealPath(), 'r');
-        $headers = fgetcsv($handle, 0, ';'); // Assuming semicolon separator
 
-        // Expected headers: nom;categorie_id;prix_achat;prix_vente;quantite;description
+        // Read headers and remove BOM if present
+        $headersString = fgets($handle);
+        $headersString = str_replace("\xEF\xBB\xBF", '', $headersString);
+        $headers = str_getcsv(trim($headersString), ';');
+
+        // Clean headers (trim spaces)
+        $headers = array_map('trim', $headers);
 
         $user = Auth::user();
         $boutique_id = $this->getBoutiqueId();
         $count = 0;
 
         while (($row = fgetcsv($handle, 0, ';')) !== false) {
+            // Skip empty rows
+            if (empty(array_filter($row))) continue;
+
+            // Ensure row matches headers count
+            if (count($headers) !== count($row)) {
+                continue;
+            }
+
             $data = array_combine($headers, $row);
 
             $produit = Produit::create([
-                'nom' => $data['nom'],
-                'categorie_id' => $data['categorie_id'],
+                'nom' => $data['nom'] ?? 'Produit sans nom',
+                'categorie_id' => $request->input('categorie_id'),
                 'description' => $data['description'] ?? '',
                 'image' => asset('storage/produit/default.png')
             ]);
@@ -381,9 +401,9 @@ class ProduitController extends Controller
             Stock::create([
                 'produit_id' => $produit->id,
                 'boutique_id' => $boutique_id,
-                'quantite' => $data['quantite'],
-                'prix_achat' => $data['prix_achat'],
-                'prix_vente' => $data['prix_vente'],
+                'quantite' => $data['quantite'] ?? 0,
+                'prix_achat' => $data['prix_achat'] ?? 0,
+                'prix_vente' => $data['prix_vente'] ?? 0,
                 'date_reapprovisionnement' => now()->format('Y-m-d')
             ]);
 
@@ -391,7 +411,7 @@ class ProduitController extends Controller
                 'produit_id' => $produit->id,
                 'boutique_id' => $boutique_id,
                 'user_id' => $user->id,
-                'quantite' => $data['quantite'],
+                'quantite' => $data['quantite'] ?? 0,
                 'type' => 'ajout',
                 'description' => "Importation CSV",
                 'date' => now()->format('Y-m-d')
@@ -410,14 +430,35 @@ class ProduitController extends Controller
      */
     public function destroy(Produit $produit)
     {
+        $boutique_id = $this->getBoutiqueId();
+        if (!$boutique_id) {
+            return response()->json(['error' => 'Aucune boutique sélectionnée'], 400);
+        }
+
+        // Verify product belongs to a stock in this boutique
+        $hasStock = \App\Models\Stock::where('produit_id', $produit->id)
+            ->where('boutique_id', $boutique_id)
+            ->exists();
+
+        if (!$hasStock) {
+            return response()->json(['error' => 'Produit non trouvé dans cette boutique'], 404);
+        }
+
         //Pour la suppression d'un produit (Soft Delete enabled):
         $produit->delete();
+
+        // \Log::info("Product {$produit->id} soft deleted by user " . auth()->id() . " for boutique {$boutique_id}");
+
         return response()->json(['message' => 'Produit déplacé vers la corbeille'], 200);
     }
 
     public function trashed()
     {
         $boutique_id = $this->getBoutiqueId();
+        if (!$boutique_id) {
+            return response()->json(['error' => 'Aucune boutique sélectionnée'], 400);
+        }
+
         $produits = Produit::onlyTrashed()
             ->with(['categorie', 'stock' => function ($query) use ($boutique_id) {
                 $query->where('boutique_id', $boutique_id);
@@ -432,19 +473,32 @@ class ProduitController extends Controller
 
     public function restore(Request $request, $id)
     {
+        $boutique_id = $this->getBoutiqueId();
+        if (!$boutique_id) {
+            return response()->json(['error' => 'Aucune boutique sélectionnée'], 400);
+        }
+
         $produit = Produit::onlyTrashed()->findOrFail($id);
+
+        // Verify product belongs to this boutique's stock
+        $stock = Stock::where('produit_id', $id)
+            ->where('boutique_id', $boutique_id)
+            ->first();
+
+        if (!$stock) {
+            return response()->json(['error' => 'Produit non trouvé dans cette boutique'], 404);
+        }
+
         $produit->restore();
 
         if ($request->has('quantite')) {
-            $boutique_id = $this->getBoutiqueId();
-            $stock = Stock::where('produit_id', $id)->where('boutique_id', $boutique_id)->first();
-            if ($stock) {
-                $stock->update([
-                    'quantite' => $request->quantite,
-                    'date_reapprovisionnement' => now()->format('Y-m-d')
-                ]);
-            }
+            $stock->update([
+                'quantite' => $request->quantite,
+                'date_reapprovisionnement' => now()->format('Y-m-d')
+            ]);
         }
+
+        // Log::info("Product {$id} restored by user " . auth()->id() . " for boutique {$boutique_id}");
 
         return response()->json(['message' => 'Produit restauré avec succès'], 200);
     }

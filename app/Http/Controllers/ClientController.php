@@ -31,14 +31,40 @@ class ClientController extends Controller
                 DB::raw('SUM(dv.quantite) as quantite')
             )
             ->where('v.boutique_id', $boutique_id)
-            ->whereRaw('c.nom <> ?', 'Particulier')
+            ->whereRaw('c.nom <> ?', 'ANONYME')
             ->groupBy('c.id')
             ->orderBy('c.id', 'desc')
             ->get();
         return response()->json($client, 200);
     }
 
-    public function clientAnnee($annee) {}
+    public function clientAnnee($annee) {
+        ['annee'=>$annee];
+
+        $boutique_id = $this->getBoutiqueId();
+        $client = DB::table('clients as c')
+            ->join('factures as f', 'f.client_id', 'c.id')
+            ->join('facture_ventes as fv', 'fv.facture_id', 'f.id')
+            ->join('ventes as v', 'v.id', 'fv.vente_id')
+            ->join('detail_ventes as dv', 'dv.vente_id', 'v.id')
+            ->select(
+                'c.nom as nomClient',
+                'c.id as idClient',
+                'f.id as idFacture',
+                'c.telephone as telClient',
+                'f.statut as statut',
+                'v.date_vente as dateVente',
+                'v.montant_total as montant',
+                DB::raw('SUM(dv.quantite) as quantite')
+            )
+            ->where('v.boutique_id', $boutique_id)
+            ->whereRaw('c.nom <> ?', 'ANONYME')
+            ->whereYear('fv.created_at',$annee)
+            ->groupBy('c.id')
+            ->orderBy('c.id', 'desc')
+            ->get();
+        return response()->json($client, 200);
+    }
 
     public function clientFidele()
     {
@@ -59,7 +85,7 @@ class ClientController extends Controller
                 DB::raw('SUM(dv.quantite) as quantite')
             )
             ->where('v.boutique_id', $boutique_id)
-            ->whereRaw('c.nom <> ?', 'Particulier')
+            ->whereRaw('c.nom <> ?', 'ANONYME')
             ->groupBy('c.id')
             ->orderBy('quantite', 'desc')
             ->limit(5)

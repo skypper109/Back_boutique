@@ -17,6 +17,11 @@ class Vente extends Model
         return $this->belongsTo(Produit::class);
     }
 
+    public function client()
+    {
+        return $this->belongsTo(Client::class);
+    }
+
     public function boutique()
     {
         return $this->belongsTo(Boutique::class);
@@ -36,6 +41,16 @@ class Vente extends Model
     public function factureVentes()
     {
         return $this->hasMany(FactureVente::class);
+    }
+
+    public function paiementsCredit()
+    {
+        return $this->hasMany(PaiementCredit::class);
+    }
+
+    public function getIsCreditAttribute()
+    {
+        return $this->type_paiement === 'credit';
     }
     public function scopeVenteProduit($query, $id)
     {

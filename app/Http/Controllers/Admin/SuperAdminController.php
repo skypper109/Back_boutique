@@ -80,21 +80,27 @@ class SuperAdminController extends Controller
         ]);
 
         DB::transaction(function () use ($request) {
-            $boutique = Boutique::create([
-                'nom' => $request->nom,
-                'adresse' => $request->adresse,
-                'telephone' => $request->telephone,
-                'is_active' => true
-            ]);
 
-            User::create([
+            $user = User::create([
                 'name' => 'Admin ' . $request->nom,
                 'email' => $request->email_admin,
                 'password' => Hash::make($request->password_admin),
                 'role' => 'admin',
-                'boutique_id' => $boutique->id,
+                'boutique_id' => null,
                 'is_active' => true
             ]);
+
+            $boutique = Boutique::create([
+                'nom' => $request->nom,
+                'adresse' => $request->adresse,
+                'telephone' => $request->telephone,
+                'is_active' => true,
+                'user_id' =>$user->id,
+                'email' => $request->email_admin
+            ]);
+            $user->boutique_id = $boutique->id;
+            $user->save();
+            
         });
 
         return redirect()->route('admin.boutiques.index')->with('success', 'Boutique et administrateur créés avec succès.');

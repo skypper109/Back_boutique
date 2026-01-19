@@ -10,7 +10,12 @@ class Client extends Model
     use HasFactory;
     use HasFactory;
     protected $guarded = [];
-    public function factures(){
+    public function factures()
+    {
         return $this->hasMany(Facture::class);
+    }
+    public function ventes()
+    {
+        return $this->hasMany(Vente::class);
     }
 }

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\SuperAdminController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\FactureController;
@@ -11,6 +12,7 @@ use App\Http\Controllers\CategorieController;
 use App\Http\Controllers\BoutiqueController;
 use App\Http\Controllers\AnneeController;
 use App\Http\Controllers\UserStatusController;
+use App\Http\Controllers\CreditController;
 
 
 // Auth Routes
@@ -23,22 +25,25 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/boutique/check-status', [UserStatusController::class, 'checkBoutiqueStatus']);
 });
 
-// Protected Routes with User and Boutique Active Status Check
-Route::middleware(['auth:sanctum', 'check.user.active', 'check.boutique.active'])->group(function () {
+// Protected Routes (Basic Authentication)
+Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/user', [AuthController::class, 'index']);
     Route::get('/user/{id}', [AuthController::class, 'showUser']);
     Route::post('/register', [AuthController::class, 'register']);
     Route::put('/user/{id}', [AuthController::class, 'updateUser']);
-    Route::patch('/user/{id}/toggle-status', [AuthController::class, 'toggleUserStatus']);
+    Route::post('/user/{user}/toggle-status', [AuthController::class, 'toggleUserStatus']);
     Route::delete('/user/{id}', [AuthController::class, 'deleteUser']);
 
     // Categories Routes
+    Route::get('categories/{id}', [CategorieController::class, 'edit']);
+    Route::put('categories/{id}', [CategorieController::class, 'update']);
     Route::apiResource('categories', CategorieController::class);
 
     // Products Routes
     Route::get('produits/trashed', [ProduitController::class, 'trashed']);
     Route::post('produits/{id}/restore', [ProduitController::class, 'restore']);
     Route::get('produits/editProd/{produit}', [ProduitController::class, 'editProd']);
+    Route::post('produits/{produit}', [ProduitController::class, 'update']);
     Route::apiResource('produits', ProduitController::class);
 
     // Profile Routes
@@ -95,6 +100,13 @@ Route::middleware(['auth:sanctum', 'check.user.active', 'check.boutique.active']
     Route::get('chiffre', [VenteController::class, 'chiffre']);
     Route::get('chiffre/{annee}', [VenteController::class, 'getVenteByAnnee']);
     Route::get('chiffre/{annee}/{mois}', [VenteController::class, 'getVenteByMois']);
+
+    // Credit & Payments
+    Route::get('credits', [CreditController::class, 'index']);
+    Route::get('credits/debtors', [CreditController::class, 'debtors']);
+    Route::post('credits/payments', [CreditController::class, 'addPayment']);
+    Route::get('credits/statement/{id}', [CreditController::class, 'saleStatement']);
+    Route::get('proformas', [VenteController::class, 'getProformas']);
 
     Route::apiResource('boutiques', BoutiqueController::class);
 });

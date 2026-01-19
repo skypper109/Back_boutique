@@ -47,27 +47,31 @@ class CategorieController extends Controller
     public function show(Categorie $categorie)
     {
         // On retourne la categorie qui a ete trouvee
+        $cat = Categorie::all()->find($categorie);
 
-
-        return response()->json($categorie);
+        return response()->json($$cat, 200);
     }
 
     /**
      * Show the form for editing the specified resource.
      */
-    public function edit(Categorie $categorie)
+    public function edit($categorie)
     {
         // On retourne la categorie qui a ete trouvee
-        return response()->json($categorie);
+        ['id' => $categorie];
+        $cat = Categorie::where("id", $categorie)->first();
+        return response()->json($cat);
     }
 
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, Categorie $categorie)
+    public function update(Request $request, $categorie)
     {
         // On met a jour la categorie qui a ete trouvee
-        $categorie->update($request->all());
+        ['id' => $categorie];
+        $cat = Categorie::where('id', $categorie)->first();
+        $cat->update($request->all());
         // $categorie->nom = $request->nom;
         // $categorie->description = $request->description;
         // $categorie->save();

@@ -11,6 +11,12 @@ class Vente extends Model
     use HasApiTokens;
     use HasFactory;
     protected $guarded = [];
+    protected $casts = [
+        'date_vente' => 'date',
+        'montant_total' => 'float',
+        'montant_avance' => 'float',
+        'montant_restant' => 'float',
+    ];
     // On definit la relation entre les ventes et les produits
     public function produit()
     {
@@ -66,6 +72,6 @@ class Vente extends Model
             ->join('produits', 'produits.id', '=', 'ventes.produit_id')
             ->select('ventes.*', 'produits.nom', 'produits.prix_vente')
             ->where('ventes.produit_id', $id)
-            ->where('ventes.date', $date);
+            ->where('ventes.date_vente', $date);
     }
 }

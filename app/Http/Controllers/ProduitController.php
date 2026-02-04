@@ -142,7 +142,7 @@ class ProduitController extends Controller
     {
         // DB::statement("SET lc_time_names = 'fr_FR'");
         $boutique_id = $this->getBoutiqueId();
-        $inventaires = Inventaire::with('produit.stock', 'user')
+        $inventaires = Inventaire::with('produit.stock', 'user', 'boutique')
             ->where('boutique_id', $boutique_id)
             ->orderBy('id', 'desc')->get();
         return response()->json($inventaires, 200);
@@ -154,7 +154,7 @@ class ProduitController extends Controller
         // DB::statement("SET lc_time_names = 'fr_FR'");
 
         $boutique_id = $this->getBoutiqueId();
-        $inventaires = Inventaire::with('produit.stock', 'user')
+        $inventaires = Inventaire::with('produit.stock', 'user', 'boutique')
             ->where('boutique_id', $boutique_id)
             ->whereBetween('date', [$dateDebut, $dateFin])
             ->orderBy('created_at', 'desc')->get();
@@ -174,14 +174,16 @@ class ProduitController extends Controller
         }
 
         //Pour la creation d'un nouveau produit:
-        $request->validate([
-            'nom' => 'required|string|max:255',
-            'categorie_id' => 'required|integer',
+        $fields = $request->validate([
+            'nom' => 'required|string',
             'description' => 'nullable|string',
-            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:10048',
-            'quantite' => 'required|integer',
-            'prixVente' => 'required|numeric',
-            'prixAchat' => 'required|numeric',
+            'categorie_id' => 'required|exists:categories,id',
+            'prix_achat' => 'required|numeric|min:0',
+            'prix_vente' => 'required|numeric|min:0',
+            'prix_detail' => 'nullable|numeric|min:0',
+            'prix_master' => 'nullable|numeric|min:0|lte:prix_detail',
+            'quantite' => 'required|integer|min:0',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
         ]);
         $chemin = null;
         if ($request->hasFile('image')) {
@@ -189,6 +191,7 @@ class ProduitController extends Controller
             $chemin = $request->file('image')->storeAs('produit', $fileName, 'public');
             $produit = Produit::create([
                 'nom' => $request->input('nom'),
+                'reference' => $request->input('reference'),
                 'description' => $request->input('description'),
                 'categorie_id' => $request->input('categorie_id'),
                 'image' => asset('storage/' . $chemin)
@@ -197,6 +200,7 @@ class ProduitController extends Controller
             //pour les produits sans fichier image :
             $produit = Produit::create([
                 'nom' => $request->input('nom'),
+                'reference' => $request->input('reference'),
                 'description' => $request->input('description'),
                 'categorie_id' => $request->input('categorie_id'),
                 'image' => asset('storage/produit/default.png')
@@ -286,14 +290,16 @@ class ProduitController extends Controller
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:10048',
             'description' => 'nullable|string',
             'categorie_id' => 'integer',
+            'reference' => 'nullable|string|max:50',
             // Optionnel : Mise à jour du stock
-            'prix_vente' => 'nullable|numeric',
-            'prix_achat' => 'nullable|numeric',
+            'prixVente' => 'nullable|numeric',
+            'prixAchat' => 'nullable|numeric',
             'quantite' => 'nullable|integer'
         ]);
 
         $data = [
             'nom' => $request->input('nom', $produit->nom),
+            'reference' => $request->input('reference', $produit->reference),
             'description' => $request->input('description', $produit->description),
             'categorie_id' => $request->input('categorie_id', $produit->categorie_id),
         ];
@@ -310,10 +316,14 @@ class ProduitController extends Controller
         $boutique_id = $this->getBoutiqueId();
         if ($request->has('prix_vente') || $request->has('prix_achat') || $request->has('quantite')) {
             $stock = Stock::where('produit_id', $produit->id)->where('boutique_id', $boutique_id)->first();
+            
+            $prix_vente = $request->input('prix_vente') ?? $request->input('prixVente');
+            $prix_achat = $request->input('prix_achat') ?? $request->input('prixAchat');
+            
             if ($stock) {
                 $stock->update([
-                    'prix_vente' => $request->input('prix_vente', $stock->prix_vente),
-                    'prix_achat' => $request->input('prix_achat', $stock->prix_achat),
+                    'prix_vente' => $prix_vente ?? $stock->prix_vente,
+                    'prix_achat' => $prix_achat ?? $stock->prix_achat,
                     'quantite' => $request->input('quantite', $stock->quantite),
                 ]);
             } else {
@@ -321,8 +331,8 @@ class ProduitController extends Controller
                     'produit_id' => $produit->id,
                     'boutique_id' => $boutique_id,
                     'quantite' => $request->input('quantite', 0),
-                    'prix_achat' => $request->input('prix_achat', 0),
-                    'prix_vente' => $request->input('prix_vente', 0),
+                    'prix_achat' => $prix_achat ?? 0,
+                    'prix_vente' => $prix_vente ?? 0,
                 ]);
             }
         }
@@ -342,7 +352,7 @@ class ProduitController extends Controller
         $ventes_jour = DB::table('ventes')
             ->where('boutique_id', $boutique_id)
             ->where('statut', 'validee')
-            ->whereDate('date_vente', Carbon::today())
+            ->whereRaw("date_vente = ?", [Carbon::today()->format('Y-m-d')])
             ->count();
 
         $categorie_count = \App\Models\Categorie::where('boutique_id', $boutique_id)
@@ -393,6 +403,7 @@ class ProduitController extends Controller
 
             $produit = Produit::create([
                 'nom' => $data['nom'] ?? 'Produit sans nom',
+                'reference' => $data['reference'] ?? null,
                 'categorie_id' => $request->input('categorie_id'),
                 'description' => $data['description'] ?? '',
                 'image' => asset('storage/produit/default.png')

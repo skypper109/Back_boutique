@@ -12,11 +12,11 @@ use App\Http\Controllers\CategorieController;
 use App\Http\Controllers\BoutiqueController;
 use App\Http\Controllers\AnneeController;
 use App\Http\Controllers\UserStatusController;
-use App\Http\Controllers\CreditController;
+use App\Http\Controllers\{CreditController,ExpenseController};
 
 
 // Auth Routes
-Route::post('/login', [AuthController::class, 'login']);
+Route::post('/login', [AuthController::class, 'login'])->name('login');
 Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
 
 // User and Boutique Status Check Routes (must be authenticated)
@@ -40,6 +40,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::apiResource('categories', CategorieController::class);
 
     // Products Routes
+    Route::post('produits/import-csv', [ProduitController::class, 'importCSV']);
     Route::get('produits/trashed', [ProduitController::class, 'trashed']);
     Route::post('produits/{id}/restore', [ProduitController::class, 'restore']);
     Route::get('produits/editProd/{produit}', [ProduitController::class, 'editProd']);
@@ -92,7 +93,6 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
     // Boutiques
     Route::get('summary', [ProduitController::class, 'summary']);
-    Route::post('produits/import-csv', [ProduitController::class, 'importCSV']);
     Route::get('boutiques-reports', [BoutiqueController::class, 'allStats']);
     Route::get('boutiques/{id}/stats', [BoutiqueController::class, 'stats']);
 
@@ -107,6 +107,16 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('credits/payments', [CreditController::class, 'addPayment']);
     Route::get('credits/statement/{id}', [CreditController::class, 'saleStatement']);
     Route::get('proformas', [VenteController::class, 'getProformas']);
+    Route::post('proformas/{id}/convert', [VenteController::class, 'convertProformaToSale']);
 
+    // Expenses Routes
+
+    Route::get('/expenses/dashboard', [ExpenseController::class, 'dashboard']);
+    Route::apiResource('expenses', ExpenseController::class);
+    Route::middleware('role:admin,gestionnaire')->group(function () {
+    });
+
+    Route::post('/boutiques/store-with-manager', [BoutiqueController::class, 'storeWithManager'])->middleware('role:admin');
     Route::apiResource('boutiques', BoutiqueController::class);
+
 });

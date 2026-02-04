@@ -35,7 +35,7 @@ class AuthController extends Controller
                 $user->save();
             } else {
                 return response()->json([
-                    'error' => 'Mot de passe incorrect'
+                    'error' => 'Mot de passe ou email incorrect'
                 ], 401);
             }
         }
@@ -43,6 +43,9 @@ class AuthController extends Controller
         if (!$user->is_active) {
             // Optional: Log or handle inactive users differently if needed, 
             // but here we allow them to proceed as per request.
+                return response()->json([
+                    'error' => 'Votre compte est en etat désactivé, veillez contacter votre admin.'
+                ], 401);
         }
 
         $token = $user->createToken('auth_token')->plainTextToken;
@@ -115,12 +118,12 @@ class AuthController extends Controller
         $user = User::create([
             'name' => $fields['name'],
             'email' => $fields['email'],
-            'password' => $fields['password'], // Hash is handled by cast in User model
+            'password' => $fields['password'], 
             'role' => $fields['role'],
             'boutique_id' => $fields['boutique_id']
         ]);
 
-        return response()->json($user, 201);
+        return response()->json($user, 200);
     }
 
     public function updateUser(Request $request, $id)

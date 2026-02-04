@@ -35,7 +35,7 @@ class VenteController extends Controller
         $topVente = DetailVente::with('produit')
             ->whereHas('vente', function ($q) use ($boutique_id) {
                 $q->where('boutique_id', $boutique_id)
-                    ->where('statut', 'validee');
+                    ->whereIn('statut', ['validee', 'payee', 'credit']);
             })
             ->selectRaw('produit_id, prix_unitaire, SUM(quantite) as total_quantite, SUM(montant_total) as total_montant')
             ->groupBy('produit_id', 'prix_unitaire')
@@ -51,7 +51,7 @@ class VenteController extends Controller
         $topVente = DetailVente::with('produit')
             ->whereHas('vente', function ($q) use ($boutique_id) {
                 $q->where('boutique_id', $boutique_id)
-                    ->where('statut', 'validee');
+                    ->whereIn('statut', ['validee', 'payee', 'credit']);
             })
             ->selectRaw('produit_id, prix_unitaire, SUM(quantite) as total_quantite, SUM(montant_total) as total_montant')
             ->groupBy('produit_id', 'prix_unitaire')
@@ -265,9 +265,9 @@ class VenteController extends Controller
 
         $parAnnee = Vente::where('boutique_id', $boutique_id)
             ->whereIn('statut', ['validee', 'payee', 'credit'])
-            ->selectRaw("strftime('%Y', date_vente) as annee, SUM(montant_total) as ca")
-            ->groupByRaw("strftime('%Y', date_vente)")
-            ->orderByRaw("strftime('%Y', date_vente) DESC")
+            ->selectRaw("YEAR(date_vente) as annee, SUM(montant_total) as ca")
+            ->groupByRaw("YEAR(date_vente)")
+            ->orderByRaw("YEAR(date_vente) DESC")
             ->get();
 
         $currentYear = now()->year;
@@ -275,14 +275,14 @@ class VenteController extends Controller
             ->join('detail_ventes', 'ventes.id', '=', 'detail_ventes.vente_id')
             ->where('ventes.boutique_id', $boutique_id)
             ->whereIn('ventes.statut', ['validee', 'payee', 'credit'])
-            ->whereYear('ventes.date_vente', $currentYear)
+            ->whereRaw("YEAR(ventes.date_vente) = ?", [$currentYear])
             ->select(
-                DB::raw("strftime('%m', ventes.date_vente) as mois_num"),
+                DB::raw("MONTH(ventes.date_vente) as mois_num"),
                 DB::raw('SUM(detail_ventes.montant_total) as ca'),
                 DB::raw('SUM(detail_ventes.quantite) as qtv')
             )
-            ->groupBy(DB::raw("strftime('%m', ventes.date_vente)"))
-            ->orderBy(DB::raw("strftime('%m', ventes.date_vente)"), 'DESC')
+            ->groupBy(DB::raw("MONTH(ventes.date_vente)"))
+            ->orderBy(DB::raw("MONTH(ventes.date_vente)"), 'DESC')
             ->get();
 
         return response()->json([
@@ -297,9 +297,9 @@ class VenteController extends Controller
         $boutique_id = $this->getBoutiqueId();
         $chiffre = Vente::where('boutique_id', $boutique_id)
             ->whereIn('statut', ['validee', 'payee', 'credit'])
-            ->selectRaw("strftime('%Y', date_vente) as annee, SUM(montant_total) as total")
-            ->groupByRaw("strftime('%Y', date_vente)")
-            ->orderByRaw("strftime('%Y', date_vente)")
+            ->selectRaw("YEAR(date_vente) as annee, SUM(montant_total) as total")
+            ->groupByRaw("YEAR(date_vente)")
+            ->orderByRaw("YEAR(date_vente)")
             ->get();
         return response()->json($chiffre, 200);
     }
@@ -309,9 +309,9 @@ class VenteController extends Controller
         $boutique_id = $this->getBoutiqueId();
         $annee = Vente::where('boutique_id', $boutique_id)
             ->whereIn('statut', ['validee', 'payee', 'credit'])
-            ->selectRaw("strftime('%Y', date_vente) as annee")
-            ->groupByRaw("strftime('%Y', date_vente)")
-            ->orderByRaw("strftime('%Y', date_vente) DESC")
+            ->selectRaw("YEAR(date_vente) as annee")
+            ->groupByRaw("YEAR(date_vente)")
+            ->orderByRaw("YEAR(date_vente) DESC")
             ->get();
         return response()->json($annee, 200);
     }
@@ -323,14 +323,14 @@ class VenteController extends Controller
             ->join('detail_ventes', 'ventes.id', '=', 'detail_ventes.vente_id')
             ->where('ventes.boutique_id', $boutique_id)
             ->whereIn('ventes.statut', ['validee', 'payee', 'credit'])
-            ->whereYear('ventes.date_vente', $annee)
+            ->whereRaw("YEAR(ventes.date_vente) = ?", [$annee])
             ->select(
-                DB::raw("strftime('%m', ventes.date_vente) as mois_num"),
+                DB::raw("MONTH(ventes.date_vente) as mois_num"),
                 DB::raw('SUM(detail_ventes.montant_total) as ca'),
                 DB::raw('SUM(detail_ventes.quantite) as qtv')
             )
-            ->groupBy(DB::raw("strftime('%m', ventes.date_vente)"))
-            ->orderBy(DB::raw("strftime('%m', ventes.date_vente)"), 'DESC')
+            ->groupBy(DB::raw("MONTH(ventes.date_vente)"))
+            ->orderBy(DB::raw("MONTH(ventes.date_vente)"), 'DESC')
             ->get();
 
         return response()->json($vente, 200);
@@ -341,10 +341,10 @@ class VenteController extends Controller
         $boutique_id = $this->getBoutiqueId();
         $venteAnneeMois = Vente::where('boutique_id', $boutique_id)
             ->whereIn('statut', ['validee', 'payee', 'credit'])
-            ->selectRaw("strftime('%d', date_vente) as jour, SUM(montant_total) as total")
-            ->whereRaw("strftime('%Y', date_vente) = ? AND strftime('%m', date_vente) = ?", [$annee, sprintf("%02d", $mois)])
-            ->groupByRaw("strftime('%d', date_vente)")
-            ->orderByRaw("strftime('%d', date_vente)")
+            ->selectRaw("DAY(date_vente) as jour, SUM(montant_total) as total")
+            ->whereRaw("YEAR(date_vente) = ? AND MONTH(date_vente) = ?", [$annee, $mois])
+            ->groupByRaw("DAY(date_vente)")
+            ->orderByRaw("DAY(date_vente)")
             ->get();
         return response()->json($venteAnneeMois, 200);
     }
@@ -355,9 +355,11 @@ class VenteController extends Controller
         $results = DB::table('ventes')
             ->where('boutique_id', $boutique_id)
             ->whereIn('statut', ['validee', 'payee', 'credit'])
-            ->whereYear('date_vente', $year)
-            ->whereMonth('date_vente', $month)
-            ->whereDay('date_vente', $day)
+            ->whereRaw("YEAR(date_vente) = ? AND MONTH(date_vente) = ? AND DAY(date_vente) = ?", [
+                $year,
+                $month,
+                $day
+            ])
             ->selectRaw('COUNT(*) as nombre, SUM(montant_total) as total')
             ->first();
 
@@ -370,8 +372,10 @@ class VenteController extends Controller
         $results = DB::table('ventes')
             ->where('boutique_id', $boutique_id)
             ->whereIn('statut', ['validee', 'payee', 'credit'])
-            ->whereYear('date_vente', $year)
-            ->whereMonth('date_vente', $month)
+            ->whereRaw("YEAR(date_vente) = ? AND MONTH(date_vente) = ?", [
+                $year,
+                $month
+            ])
             ->selectRaw('COUNT(*) as nombre, SUM(montant_total) as total')
             ->first();
 
@@ -384,7 +388,7 @@ class VenteController extends Controller
         $results = DB::table('ventes')
             ->where('boutique_id', $boutique_id)
             ->whereIn('statut', ['validee', 'payee', 'credit'])
-            ->whereYear('date_vente', $year)
+            ->whereRaw("YEAR(date_vente) = ?", [$year])
             ->selectRaw('COUNT(*) as nombre, SUM(montant_total) as total')
             ->first();
 
@@ -421,7 +425,7 @@ class VenteController extends Controller
         $ventesJour = DB::table('ventes')
             ->where('boutique_id', $boutique_id)
             ->whereIn('statut', ['validee', 'payee', 'credit'])
-            ->whereDate('date_vente', now())
+            ->whereRaw("date_vente = ?", [now()->format('Y-m-d')])
             ->count();
 
         return response()->json([
@@ -489,14 +493,14 @@ class VenteController extends Controller
             $vente->montant_total = $request->montant_total;
             $vente->type_paiement = $is_proforma ? 'proforma' : ($request->type_paiement ?? 'contant');
             $vente->montant_avance = $request->montant_avance ?? 0;
-            
+
             if ($is_proforma) {
                 $vente->statut = 'proforma';
                 $vente->montant_restant = $request->montant_total;
             } else {
                 $vente->statut = ($vente->type_paiement === 'credit') ? 'credit' : 'payee';
-                $vente->montant_restant = ($vente->type_paiement === 'credit') 
-                    ? ($request->montant_total - $vente->montant_avance) 
+                $vente->montant_restant = ($vente->type_paiement === 'credit')
+                    ? ($request->montant_total - $vente->montant_avance)
                     : 0;
             }
 
@@ -504,8 +508,14 @@ class VenteController extends Controller
             $vente->save();
 
             foreach ($request->produits as $item) {
-                $pId = $item['produits']['id'];
-                $pNom = $item['produits']['nom'];
+                // Robust ID extraction (handles both {produits: {id: 1}} and {id: 1})
+                $pId = isset($item['produits']['id']) ? $item['produits']['id'] : ($item['id'] ?? null);
+
+                if (!$pId) {
+                    throw new \Exception("ID produit manquant dans la requête");
+                }
+
+                $pNom = isset($item['produits']['nom']) ? $item['produits']['nom'] : ($item['nom'] ?? "Produit #$pId");
 
                 $stock = Stock::where('produit_id', $pId)
                     ->where('boutique_id', $boutique_id)
@@ -523,13 +533,16 @@ class VenteController extends Controller
                 $detail->vente_id = $vente->id;
                 $detail->produit_id = $pId;
                 $detail->quantite = $item['quantite'];
-                
-                $prixU = $item['prix'] ?? $item['produits']['stock']['prix_vente'];
+
+                // Robust price extraction
+                $prixU = $item['prix'] ?? ($item['produits']['stock']['prix_vente'] ?? ($stock->prix_vente ?? 0));
+
                 $detail->prix_unitaire = $prixU;
                 $detail->montant = $prixU * $item['quantite'];
                 $detail->remise = $request->remise ?? 0;
                 $detail->montant_total = $item['montant_total'] ?? $detail->montant;
                 $detail->montant_paye = $detail->montant_total;
+                $detail->quantite_restante = $item['quantite'];
                 $detail->save();
 
                 if (!$is_proforma) {
@@ -567,7 +580,83 @@ class VenteController extends Controller
                 'venteID' => $vente->id,
                 'factID' => isset($facture) ? $facture->id : null
             ], 201);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => $e->getMessage()], 400);
+        }
+    }
 
+    public function convertProformaToSale(Request $request, $id)
+    {
+        $boutique_id = $this->getBoutiqueId();
+        $vente = Vente::with('detailVentes')->where('id', $id)
+            ->where('boutique_id', $boutique_id)
+            ->where('statut', 'proforma')
+            ->firstOrFail();
+
+        $user = Auth::user();
+        $type_paiement = $request->input('type_paiement', 'contant');
+        $montant_avance = $request->input('montant_avance', 0);
+
+        DB::beginTransaction();
+        try {
+            // 1. Stock Check & Deduction
+            foreach ($vente->detailVentes as $detail) {
+                $stock = Stock::where('produit_id', $detail->produit_id)
+                    ->where('boutique_id', $boutique_id)
+                    ->first();
+
+                if (!$stock || $stock->quantite < $detail->quantite) {
+                    $pNom = Produit::find($detail->produit_id)->nom ?? 'Produit inconnu';
+                    throw new \Exception("Stock insuffisant pour $pNom ($stock->quantite disponible)");
+                }
+
+                $stock->quantite -= $detail->quantite;
+                $stock->save();
+
+                // Log Inventory
+                Inventaire::create([
+                    'produit_id' => $detail->produit_id,
+                    'boutique_id' => $boutique_id,
+                    'user_id' => $user->id,
+                    'quantite' => $detail->quantite,
+                    'type' => 'retrait',
+                    'description' => 'Conversion Pro-forma #' . $vente->id . ' vers Vente',
+                    'date' => now()->format('Y-m-d')
+                ]);
+            }
+
+            // 2. Update Vente Identity
+            $vente->type_paiement = $type_paiement;
+            $vente->montant_avance = $montant_avance;
+            $vente->statut = ($type_paiement === 'credit') ? 'credit' : 'payee';
+            $vente->montant_restant = ($type_paiement === 'credit')
+                ? ($vente->montant_total - $montant_avance)
+                : 0;
+            $vente->date_vente = now()->format('Y-m-d');
+            $vente->save();
+
+            // 3. Generate Facture
+            $facture = Facture::create([
+                'client_id' => $vente->client_id,
+                'boutique_id' => $boutique_id,
+                'montant_total' => $vente->montant_total,
+                'date_facturation' => now()->format('Y-m-d'),
+                'statut' => ($type_paiement === 'credit' ? 'en attente' : 'payée'),
+                'description' => 'Facture issue de Pro-forma #' . $vente->id
+            ]);
+
+            FactureVente::create([
+                'facture_id' => $facture->id,
+                'vente_id' => $vente->id
+            ]);
+
+            DB::commit();
+            return response()->json([
+                'message' => 'Conversion réussie',
+                'venteID' => $vente->id,
+                'factID' => $facture->id
+            ], 200);
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json(['message' => $e->getMessage()], 400);

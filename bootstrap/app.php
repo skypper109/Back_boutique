@@ -16,8 +16,15 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'check.user.active' => \App\Http\Middleware\CheckUserActiveStatus::class,
             'check.boutique.active' => \App\Http\Middleware\EnsureBoutiqueIsActive::class,
+            'role' => \App\Http\Middleware\CheckRole::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        //
+        $exceptions->shouldRenderJsonWhen(function ($request, $e) {
+            if ($request->is('api/*')) {
+                return true;
+            }
+
+            return $request->expectsJson();
+        });
     })->create();

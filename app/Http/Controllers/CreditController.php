@@ -98,7 +98,7 @@ class CreditController extends Controller
     public function saleStatement($id)
     {
         $boutique_id = $this->getBoutiqueId();
-        $vente = Vente::with(['client', 'user', 'detailVentes.produit', 'paiementsCredit.user'])
+        $vente = Vente::with(['client', 'user', 'detailVentes.produit', 'paiementsCredit.user', 'boutique'])
             ->where('id', $id)
             ->where('boutique_id', $boutique_id)
             ->firstOrFail();

@@ -60,10 +60,18 @@ class FactureController extends Controller
             }
         }
 
-        // Récupérer le nom de la boutique depuis la première vente
+        // Récupérer les infos de la boutique depuis la première vente
         $nomBoutique = 'Ma Boutique';
+        $adresseBoutique = '-----';
+        $telephoneBoutique = '-----';
+
         if ($facture->factureVentes->isNotEmpty() && $facture->factureVentes->first()->vente) {
-            $nomBoutique = $facture->factureVentes->first()->vente->boutique->nom ?? 'Ma Boutique';
+            $boutique = $facture->factureVentes->first()->vente->boutique;
+            if ($boutique) {
+                $nomBoutique = $boutique->nom ?? 'Ma Boutique';
+                $adresseBoutique = $boutique->adresse ?? '-----';
+                $telephoneBoutique = $boutique->telephone ?? '-----';
+            }
         }
 
         $response = [
@@ -72,7 +80,10 @@ class FactureController extends Controller
             'adresseClient' => $facture->client->adresse ?? 'N/A',
             'dateFacture' => $facture->date_facturation,
             'montant_total' => $facture->montant_total,
+            'montant_remis' => $facture->factureVentes->first()->vente->detailVentes->first()->remise ?? 0,
             'nomBoutique' => $nomBoutique,
+            'adresseBoutique' => $adresseBoutique,
+            'telephoneBoutique' => $telephoneBoutique,
             'produitAchat' => $produitAchat
         ];
 

@@ -31,15 +31,16 @@ class ClientController extends Controller
                 DB::raw('SUM(dv.quantite) as quantite')
             )
             ->where('v.boutique_id', $boutique_id)
-            ->whereRaw('c.nom <> ?', 'ANONYME')
+            ->where('c.nom', '<>', 'ANONYME')
             ->groupBy('c.id')
             ->orderBy('c.id', 'desc')
             ->get();
         return response()->json($client, 200);
     }
 
-    public function clientAnnee($annee) {
-        ['annee'=>$annee];
+    public function clientAnnee($annee)
+    {
+        ['annee' => $annee];
 
         $boutique_id = $this->getBoutiqueId();
         $client = DB::table('clients as c')
@@ -58,8 +59,8 @@ class ClientController extends Controller
                 DB::raw('SUM(dv.quantite) as quantite')
             )
             ->where('v.boutique_id', $boutique_id)
-            ->whereRaw('c.nom <> ?', 'ANONYME')
-            ->whereYear('fv.created_at',$annee)
+            ->where('c.nom', '<>', 'ANONYME')
+            ->whereRaw("YEAR(fv.created_at) = ?", [$annee])
             ->groupBy('c.id')
             ->orderBy('c.id', 'desc')
             ->get();
@@ -85,7 +86,7 @@ class ClientController extends Controller
                 DB::raw('SUM(dv.quantite) as quantite')
             )
             ->where('v.boutique_id', $boutique_id)
-            ->whereRaw('c.nom <> ?', 'ANONYME')
+            ->where('c.nom', '<>', 'ANONYME')
             ->groupBy('c.id')
             ->orderBy('quantite', 'desc')
             ->limit(5)

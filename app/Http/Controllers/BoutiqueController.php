@@ -16,15 +16,15 @@ class BoutiqueController extends Controller
     public function allStats()
     {
         $user = Auth::user();
-        $boutiques = Boutique::where('user_id',$user->id)->get();
+        $boutiques = Boutique::where('user_id', $user->id)->get();
         $reports = [];
 
         foreach ($boutiques as $b) {
             $reports[] = [
                 'id' => $b->id,
                 'nom' => $b->nom,
-                'revenue' => \App\Models\Vente::where('boutique_id', $b->id)->where('statut', 'validee')->sum('montant_total'),
-                'sales_count' => \App\Models\Vente::where('boutique_id', $b->id)->where('statut', 'validee')->count(),
+                'revenue' => \App\Models\Vente::where('boutique_id', $b->id)->whereIn('statut', ['validee', 'payee', 'credit'])->sum('montant_total'),
+                'sales_count' => \App\Models\Vente::where('boutique_id', $b->id)->whereIn('statut', ['validee', 'payee', 'credit'])->count(),
                 'users_count' => \App\Models\User::where('boutique_id', $b->id)->count(),
                 'is_active' => $b->is_active
             ];
@@ -37,15 +37,15 @@ class BoutiqueController extends Controller
     {
         $boutique = Boutique::findOrFail($id);
 
-        $salesCount = Vente::where('boutique_id', $id)->count();
-        $totalRevenue = Vente::where('boutique_id', $id)->sum('montant_total');
+        $salesCount = Vente::where('boutique_id', $id)->whereIn('statut', ['validee', 'payee', 'credit'])->count();
+        $totalRevenue = Vente::where('boutique_id', $id)->whereIn('statut', ['validee', 'payee', 'credit'])->sum('montant_total');
         $usersCount = User::where('boutique_id', $id)->count();
 
         $topProducts = DetailVente::with('produit')
             ->whereHas('vente', function ($q) use ($id) {
                 $q->where('boutique_id', $id);
             })
-            ->selectRaw('produit_id, SUM(quantite) as total_qty, SUM(montant_total) as total_amount')
+            ->selectRaw('produit_id, SUM(quantite) as total_qty, SUM(detail_ventes.montant_total) as total_amount')
             ->groupBy('produit_id')
             ->orderByDesc('total_qty')
             ->limit(5)
@@ -83,18 +83,80 @@ class BoutiqueController extends Controller
      */
     public function store(Request $request)
     {
-        $fields = $request->validate([
-            'nom' => 'required|string',
-            'adresse' => 'nullable|string',
-            'telephone' => 'nullable|string',
-            'email' => 'nullable|string|email'
-        ]);
+        try {
+            $fields = $request->validate([
+                'nom' => 'required|string',
+                'adresse' => 'nullable|string',
+                'telephone' => 'nullable|string',
+                'email' => 'nullable|string|email'
+            ]);
 
-        $fields['user_id'] = Auth::id();
+            $fields['user_id'] = Auth::id();
+            $fields['is_active'] = true;
 
-        $boutique = Boutique::create($fields);
+            \Illuminate\Support\Facades\Log::info('Creating boutique with fields:', $fields);
 
-        return response()->json($boutique, 201);
+            $boutique = Boutique::create($fields);
+
+            return response()->json($boutique, 201);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Error creating boutique: ' . $e->getMessage(), [
+                'exception' => $e,
+                'request_data' => $request->all(),
+                'user_id' => Auth::id()
+            ]);
+            return response()->json([
+                'message' => 'Erreur lors de la création de la boutique',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function storeWithManager(Request $request)
+    {
+        try {
+            return DB::transaction(function () use ($request) {
+                // 1. Validate Boutique and Manager info
+                $request->validate([
+                    'boutique.nom' => 'required|string',
+                    'boutique.adresse' => 'nullable|string',
+                    'boutique.telephone' => 'nullable|string',
+                    'boutique.email' => 'nullable|string|email',
+                    'manager.name' => 'required|string',
+                    'manager.email' => 'required|string|email|unique:users,email',
+                    'manager.telephone' => 'nullable|string',
+                    'manager.password' => 'required|string|min:6',
+                ]);
+
+                // 2. Create Boutique
+                $boutiqueFields = $request->input('boutique');
+                $boutiqueFields['user_id'] = Auth::id(); // The admin who created it
+                $boutiqueFields['is_active'] = true;
+                $boutique = Boutique::create($boutiqueFields);
+
+                // 3. Create Manager User
+                $managerFields = $request->input('manager');
+                $user = User::create([
+                    'name' => $managerFields['name'],
+                    'email' => $managerFields['email'],
+                    'password' => bcrypt($managerFields['password']),
+                    'role' => 'gestionnaire',
+                    'boutique_id' => $boutique->id,
+                    'is_active' => true
+                ]);
+
+                return response()->json([
+                    'message' => 'Boutique and Manager created successfully',
+                    'boutique' => $boutique,
+                    'manager' => $user
+                ], 201);
+            });
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Erreur lors de la création de la boutique et du gestionnaire',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
     /**

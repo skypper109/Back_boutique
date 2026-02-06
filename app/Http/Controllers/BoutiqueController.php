@@ -42,6 +42,7 @@ class BoutiqueController extends Controller
         $usersCount = User::where('boutique_id', $id)->count();
 
         $topProducts = DetailVente::with('produit')
+            ->whereHas('produit')
             ->whereHas('vente', function ($q) use ($id) {
                 $q->where('boutique_id', $id);
             })
@@ -85,10 +86,22 @@ class BoutiqueController extends Controller
     {
         try {
             $fields = $request->validate([
-                'nom' => 'required|string',
+                'nom' => 'required|string|unique:boutiques,nom',
                 'adresse' => 'nullable|string',
                 'telephone' => 'nullable|string',
-                'email' => 'nullable|string|email'
+                'email' => 'nullable|string|email',
+                // PDF Customization
+                'logo' => 'nullable|string',
+                'description_facture' => 'nullable|string',
+                'description_bordereau' => 'nullable|string',
+                'description_recu' => 'nullable|string',
+                'footer_facture' => 'nullable|string',
+                'footer_bordereau' => 'nullable|string',
+                'footer_recu' => 'nullable|string',
+                'couleur_principale' => 'nullable|string',
+                'couleur_secondaire' => 'nullable|string',
+                'devise' => 'nullable|string',
+                'format_facture' => 'nullable|string',
             ]);
 
             $fields['user_id'] = Auth::id();
@@ -115,13 +128,26 @@ class BoutiqueController extends Controller
     public function storeWithManager(Request $request)
     {
         try {
-            return DB::transaction(function () use ($request) {
+            return \Illuminate\Support\Facades\DB::transaction(function () use ($request) {
                 // 1. Validate Boutique and Manager info
                 $request->validate([
-                    'boutique.nom' => 'required|string',
+                    'boutique.nom' => 'required|string|unique:boutiques,nom',
                     'boutique.adresse' => 'nullable|string',
                     'boutique.telephone' => 'nullable|string',
                     'boutique.email' => 'nullable|string|email',
+                    // PDF Customization
+                    'boutique.logo' => 'nullable|string',
+                    'boutique.description_facture' => 'nullable|string',
+                    'boutique.description_bordereau' => 'nullable|string',
+                    'boutique.description_recu' => 'nullable|string',
+                    'boutique.footer_facture' => 'nullable|string',
+                    'boutique.footer_bordereau' => 'nullable|string',
+                    'boutique.footer_recu' => 'nullable|string',
+                    'boutique.couleur_principale' => 'nullable|string',
+                    'boutique.couleur_secondaire' => 'nullable|string',
+                    'boutique.devise' => 'nullable|string',
+                    'boutique.format_facture' => 'nullable|string',
+                    
                     'manager.name' => 'required|string',
                     'manager.email' => 'required|string|email|unique:users,email',
                     'manager.telephone' => 'nullable|string',
@@ -175,10 +201,22 @@ class BoutiqueController extends Controller
         $boutique = Boutique::findOrFail($id);
 
         $fields = $request->validate([
-            'nom' => 'required|string',
+            'nom' => 'required|string|unique:boutiques,nom,' . $id,
             'adresse' => 'nullable|string',
             'telephone' => 'nullable|string',
-            'email' => 'nullable|string|email'
+            'email' => 'nullable|string|email',
+            // PDF Customization
+            'logo' => 'nullable|string',
+            'description_facture' => 'nullable|string',
+            'description_bordereau' => 'nullable|string',
+            'description_recu' => 'nullable|string',
+            'footer_facture' => 'nullable|string',
+            'footer_bordereau' => 'nullable|string',
+            'footer_recu' => 'nullable|string',
+            'couleur_principale' => 'nullable|string',
+            'couleur_secondaire' => 'nullable|string',
+            'devise' => 'nullable|string',
+            'format_facture' => 'nullable|string',
         ]);
 
         $boutique->update($fields);

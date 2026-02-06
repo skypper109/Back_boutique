@@ -105,7 +105,9 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('credits', [CreditController::class, 'index']);
     Route::get('credits/debtors', [CreditController::class, 'debtors']);
     Route::post('credits/payments', [CreditController::class, 'addPayment']);
+    Route::get('credits/payments/all', [CreditController::class, 'allPayments']);
     Route::get('credits/statement/{id}', [CreditController::class, 'saleStatement']);
+    Route::get('credits/statement/{id}/history', [CreditController::class, 'history']);
     Route::get('proformas', [VenteController::class, 'getProformas']);
     Route::post('proformas/{id}/convert', [VenteController::class, 'convertProformaToSale']);
 
@@ -115,6 +117,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::apiResource('expenses', ExpenseController::class);
     Route::middleware('role:admin,gestionnaire')->group(function () {
     });
+
+    // PDF Generation Routes
+    Route::post('/pdf/generate', [App\Http\Controllers\PdfController::class, 'generatePdf']);
+    Route::get('/pdf/preview/{type}/{id}', [App\Http\Controllers\PdfController::class, 'previewPdf']);
 
     Route::post('/boutiques/store-with-manager', [BoutiqueController::class, 'storeWithManager'])->middleware('role:admin');
     Route::apiResource('boutiques', BoutiqueController::class);

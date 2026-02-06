@@ -15,7 +15,18 @@ class Boutique extends Model
         'telephone',
         'email',
         'is_active',
-        'user_id'
+        'user_id',
+        'logo',
+        'description_facture',
+        'description_bordereau',
+        'description_recu',
+        'footer_facture',
+        'footer_bordereau',
+        'footer_recu',
+        'couleur_principale',
+        'couleur_secondaire',
+        'devise',
+        'format_facture'
     ];
 
     public function creator()

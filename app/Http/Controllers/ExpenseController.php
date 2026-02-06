@@ -91,7 +91,7 @@ class ExpenseController extends Controller
     }
 
     public function dashboard(Request $request)
-    {
+    { 
         $user = Auth::user();
         $boutiqueId = $user->role === 'admin' ? $request->boutique_id : $user->boutique_id;
         
@@ -120,10 +120,10 @@ class ExpenseController extends Controller
             ->get();
 
         return response()->json([
-            'total_year' => $totalByYear || null,
-            'monthly_evolution' => $monthlyEvolution || null,
-            'breakdown_by_type' => $breakdownByType || null,
-            'year' => $year || null
+            'total_year' => $totalByYear ?? 0,
+            'monthly_evolution' => $monthlyEvolution ?? [],
+            'breakdown_by_type' => $breakdownByType ?? [],
+            'year' => $year ?? date('Y')
         ]);
     }
 }

@@ -5,14 +5,16 @@ namespace App\Http\Controllers;
 use App\Models\Stock;
 use App\Models\Vente;
 use App\Models\Client;
+use App\Models\Expense;
 use App\Models\Facture;
 use App\Models\Produit;
 use App\Models\Inventaire;
 use App\Models\DetailVente;
 use App\Models\FactureVente;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
+use App\Models\PaiementCredit;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
 
 class VenteController extends Controller
 {
@@ -33,6 +35,7 @@ class VenteController extends Controller
     {
         $boutique_id = $this->getBoutiqueId();
         $topVente = DetailVente::with('produit')
+            ->whereHas('produit')
             ->whereHas('vente', function ($q) use ($boutique_id) {
                 $q->where('boutique_id', $boutique_id)
                     ->whereIn('statut', ['validee', 'payee', 'credit']);
@@ -49,6 +52,7 @@ class VenteController extends Controller
     {
         $boutique_id = $this->getBoutiqueId();
         $topVente = DetailVente::with('produit')
+            ->whereHas('produit')
             ->whereHas('vente', function ($q) use ($boutique_id) {
                 $q->where('boutique_id', $boutique_id)
                     ->whereIn('statut', ['validee', 'payee', 'credit']);
@@ -128,12 +132,66 @@ class VenteController extends Controller
         }
 
         if ($nouveauMontantTotal <= 0) {
-            $vente->statut = 'annulee';
+            if ($vente->type_paiement == 'credit') {
+                // If payments were already made, refund them
+                $credits = PaiementCredit::where('vente_id', $venteId)
+                    ->where('boutique_id', $boutique_id)
+                    ->get();
+                $montant_total_paye = $credits->sum('montant');
+                if ($montant_total_paye > 0) {
+                    Expense::create([
+                        'type' => "",
+                        'boutique_id' => $boutique_id,
+                        'user_id' => $user->id,
+                        'montant' => $montant_total_paye,
+                        'date' => now()->format('Y-m-d'),
+                        'description' => "Remboursement suite au retour complet de la vente #" . $venteId,
+                    ]);
+                }
+
+                $vente->montant_restant = 0;
+                $vente->statut = 'Credit annule';
+            } else {
+                $vente->statut = 'annulee';
+            }
             $vente->save();
+
             return response()->json(['message' => 'Vente annulée car tous les produits ont été retournés'], 200);
         }
 
-        $vente->montant_total = $nouveauMontantTotal;
+        if ($vente->type_paiement == 'credit') {
+            $ancienMontantTotal = $vente->montant_total;
+            $vente->montant_total = $nouveauMontantTotal;
+            $valeurRetour = $ancienMontantTotal - $nouveauMontantTotal;
+            $ancienRestant = $vente->montant_restant;
+
+            if ($valeurRetour > $ancienRestant) {
+                // Le montant du retour dépasse la dette actuelle
+                $surplusARembourser = $valeurRetour - $ancienRestant;
+                
+                Expense::create([
+                    'type' => "Remboursement Retour",
+                    'boutique_id' => $boutique_id,
+                    'user_id' => $user->id,
+                    'montant' => $surplusARembourser,
+                    'date' => now()->format('Y-m-d'),
+                    'description' => "Remboursement de surplus (Rendu au client) suite au retour produit sur la vente à crédit #" . $venteId . ". Retour: " . number_format($valeurRetour, 0, '.', ' ') . " FCFA, Dette soldée: " . number_format($ancienRestant, 0, '.', ' ') . " FCFA.",
+                ]);
+
+                $vente->montant_restant = 0;
+                $vente->statut = 'payee';
+                // $vente->montant_statut = 'Credit paye';
+            } else {
+                // On réduit simplement la dette
+                $vente->montant_restant = $ancienRestant - $valeurRetour;
+                if ($vente->montant_restant == 0) {
+                    $vente->statut = 'payee';
+                    // $vente->montant_statut = 'Credit paye';
+                }
+            }
+        } else {
+            $vente->montant_total = $nouveauMontantTotal;
+        }
         $vente->save();
 
         return response()->json(['message' => 'Vente modifiée avec succès', 'nouveau_montant' => $nouveauMontantTotal], 200);
@@ -441,6 +499,7 @@ class VenteController extends Controller
     {
         $boutique_id = $this->getBoutiqueId();
         $ventes = DetailVente::with(['produit.categorie'])
+            ->whereHas('produit')
             ->whereHas('vente', function ($q) use ($boutique_id) {
                 $q->where('boutique_id', $boutique_id)
                     ->whereIn('statut', ['validee', 'payee', 'credit']);
@@ -458,7 +517,7 @@ class VenteController extends Controller
         $request->validate([
             'produits' => 'required|array',
             'montant_total' => 'required|numeric',
-            'date' => 'required|date',
+            'date' => 'date',
             'remise' => 'required|numeric',
         ]);
 
@@ -472,7 +531,7 @@ class VenteController extends Controller
         $client_id = 1;
         if ($request->client_nom) {
             $client_nom = strtoupper($request->client_nom);
-            $client = Client::where('nom', $client_nom)->first();
+            $client = Client::where('telephone', $request->client_numero)->first();
             if (!$client) {
                 $client = Client::create([
                     'nom' => $client_nom,
@@ -504,7 +563,7 @@ class VenteController extends Controller
                     : 0;
             }
 
-            $vente->date_vente = now()->format('Y-m-d');
+            $vente->date_vente = $request->input('date') ?? now()->format('Y-m-d');
             $vente->save();
 
             foreach ($request->produits as $item) {
@@ -552,7 +611,7 @@ class VenteController extends Controller
                         'user_id' => $user->id,
                         'quantite' => $item['quantite'],
                         'type' => 'retrait',
-                        'description' => 'Vente #' . $vente->id,
+                        'description' =>$vente->statut == 'credit' ? "Produit ".$pNom . " vendu a credit " : "Vente du produit # ".(isset($item['produits']['reference']) ? $item['produits']['reference'] : ($item['reference'] ?? "Produit #$pId")),
                         'date' => now()->format('Y-m-d')
                     ]);
                 }

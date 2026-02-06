@@ -22,7 +22,7 @@ class SuperAdminSeeder extends Seeder
             User::create([
                 'name' => 'Super Admin',
                 'email' => 'super@maboutique.com',
-                'password' => 'admin1234', // Will be hashed by mutator or we should hash it if no mutator
+                'password' => 'Skypper19@', // Will be hashed by mutator or we should hash it if no mutator
                 'role' => 'admin', // Ensure 'admin' is in the Enum
                 'email_verified_at' => now(),
                 'remember_token' => Str::random(10),

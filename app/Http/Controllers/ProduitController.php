@@ -143,6 +143,7 @@ class ProduitController extends Controller
         // DB::statement("SET lc_time_names = 'fr_FR'");
         $boutique_id = $this->getBoutiqueId();
         $inventaires = Inventaire::with('produit.stock', 'user', 'boutique')
+            ->whereHas('produit')
             ->where('boutique_id', $boutique_id)
             ->orderBy('id', 'desc')->get();
         return response()->json($inventaires, 200);
@@ -159,83 +160,6 @@ class ProduitController extends Controller
             ->whereBetween('date', [$dateDebut, $dateFin])
             ->orderBy('created_at', 'desc')->get();
         return response()->json($inventaires, 200);
-    }
-
-
-
-    /**
-     * Store a newly created resource in storage.
-     */
-    public function store(Request $request)
-    {
-        $boutique_id = $this->getBoutiqueId();
-        if (!$boutique_id) {
-            return response()->json(['error' => 'Aucune boutique sélectionnée'], 400);
-        }
-
-        //Pour la creation d'un nouveau produit:
-        $fields = $request->validate([
-            'nom' => 'required|string',
-            'description' => 'nullable|string',
-            'categorie_id' => 'required|exists:categories,id',
-            'prix_achat' => 'required|numeric|min:0',
-            'prix_vente' => 'required|numeric|min:0',
-            'prix_detail' => 'nullable|numeric|min:0',
-            'prix_master' => 'nullable|numeric|min:0|lte:prix_detail',
-            'quantite' => 'required|integer|min:0',
-            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
-        ]);
-        $chemin = null;
-        if ($request->hasFile('image')) {
-            $fileName = time() . '_' . $request->file('image')->getClientOriginalName();
-            $chemin = $request->file('image')->storeAs('produit', $fileName, 'public');
-            $produit = Produit::create([
-                'nom' => $request->input('nom'),
-                'reference' => $request->input('reference'),
-                'description' => $request->input('description'),
-                'categorie_id' => $request->input('categorie_id'),
-                'image' => asset('storage/' . $chemin)
-            ]);
-        } else {
-            //pour les produits sans fichier image :
-            $produit = Produit::create([
-                'nom' => $request->input('nom'),
-                'reference' => $request->input('reference'),
-                'description' => $request->input('description'),
-                'categorie_id' => $request->input('categorie_id'),
-                'image' => asset('storage/produit/default.png')
-            ]);
-        }
-
-        $produitId = $produit->id;
-        $user = Auth::user();
-        $boutique_id = $this->getBoutiqueId();
-
-        // L'enregistrement dans la table Inventaire :
-
-        Inventaire::create([
-            'produit_id' => $produitId,
-            'boutique_id' => $boutique_id,
-            'user_id' => $user->id,
-            'quantite' => $request->input('quantite'),
-            'type' => 'ajout',
-            'description' => "Initialisation du produit " . $request->input('nom'),
-            'date' => now()->format('Y-m-d')
-        ]);
-
-        // Pour l'enregistrement dans la table stock :
-        Stock::create([
-            'produit_id' => $produitId,
-            'boutique_id' => $boutique_id,
-            'quantite' => $request->input('quantite'),
-            'date_reapprovisionnement' => now()->format('Y-m-d'),
-            'prix_achat' => $request->input('prixAchat'),
-            'prix_vente' => $request->input('prixVente'),
-            'description' => $request->input('description')
-        ]);
-
-        // return redirect()->route('produits.index')->with('success','Produit ajouté avec succès');
-        return response()->json($produit, 201);
     }
 
     /**
@@ -279,22 +203,95 @@ class ProduitController extends Controller
         return response()->json($produit, 200);
     }
 
-    /**
-     * Update the specified resource in storage.
-     */
+    public function store(Request $request)
+    {
+        $boutique_id = $this->getBoutiqueId();
+        if (!$boutique_id) {
+            return response()->json(['error' => 'Aucune boutique sélectionnée'], 400);
+        }
+
+        // Pour la creation d'un nouveau produit:
+        $fields = $request->validate([
+            'nom' => 'required|string',
+            'description' => 'nullable|string',
+            'categorie_id' => 'required|exists:categories,id',
+            'prix_achat' => 'required|numeric|min:0', 
+            'prix_vente' => 'required|numeric|min:0',
+            'prix_detail' => 'nullable|numeric|min:0',
+            'prix_master' => 'nullable|numeric|min:0',
+            'quantite' => 'required|integer|min:0',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
+            'reference' => 'nullable|string',
+            'date_achat' => 'nullable|date',
+            'date_fin_garantie' => 'nullable|date',
+        ]);
+
+        $chemin = null;
+        if ($request->hasFile('image')) {
+            $fileName = time() . '_' . $request->file('image')->getClientOriginalName();
+            $chemin = $request->file('image')->storeAs('produit', $fileName, 'public');
+            $imagePath = asset('storage/' . $chemin);
+        } else {
+            $imagePath = asset('storage/produit/default.png');
+        }
+
+        $produit = Produit::create([
+            'nom' => $request->input('nom'),
+            'reference' => $request->input('reference'),
+            'description' => $request->input('description'),
+            'categorie_id' => $request->input('categorie_id'),
+            'image' => $imagePath,
+            'prix_detail' => $request->input('prix_detail'),
+            'prix_master' => $request->input('prix_master'),
+            'date_achat' => $request->input('date_achat') ?? $request->input('dateAchat'),
+            'date_fin_garantie' => $request->input('date_fin_garantie'),
+        ]);
+
+        $produitId = $produit->id;
+        $user = Auth::user();
+
+        // L'enregistrement dans la table Inventaire :
+        Inventaire::create([
+            'produit_id' => $produitId,
+            'boutique_id' => $boutique_id,
+            'user_id' => $user->id,
+            'quantite' => $request->input('quantite'),
+            'type' => 'ajout',
+            'description' => "Initialisation du produit " . $request->input('nom'),
+            'date' => now()->format('Y-m-d')
+        ]);
+
+        // Pour l'enregistrement dans la table stock :
+        Stock::create([
+            'produit_id' => $produitId,
+            'boutique_id' => $boutique_id,
+            'quantite' => $request->input('quantite'),
+            'date_reapprovisionnement' => $request->input('date_achat') ?? now()->format('Y-m-d'),
+            'prix_achat' => $request->input('prix_achat'),
+            'prix_vente' => $request->input('prix_vente'),
+            'description' => $request->input('description')
+        ]);
+
+        return response()->json($produit, 201);
+    }
+
     public function update(Request $request, Produit $produit)
     {
-        //Pour la modification d'un produit (Nom, Description, Categorie)
+        // Pour la modification d'un produit (Nom, Description, Categorie)
         $request->validate([
             'nom' => 'string|max:255',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:10048',
             'description' => 'nullable|string',
             'categorie_id' => 'integer',
             'reference' => 'nullable|string|max:50',
-            // Optionnel : Mise à jour du stock
+            'prix_vente' => 'nullable|numeric',
+            'prix_achat' => 'nullable|numeric',
+            'prix_detail' => 'nullable|numeric',
+            'prix_master' => 'nullable|numeric',
+            'quantite' => 'nullable|integer',
+            // Accepter aussi camelCase au cas où
             'prixVente' => 'nullable|numeric',
             'prixAchat' => 'nullable|numeric',
-            'quantite' => 'nullable|integer'
         ]);
 
         $data = [
@@ -302,6 +299,8 @@ class ProduitController extends Controller
             'reference' => $request->input('reference', $produit->reference),
             'description' => $request->input('description', $produit->description),
             'categorie_id' => $request->input('categorie_id', $produit->categorie_id),
+            'prix_detail' => $request->input('prix_detail', $produit->prix_detail),
+            'prix_master' => $request->input('prix_master', $produit->prix_master),
         ];
 
         if ($request->hasFile('image')) {
@@ -314,58 +313,35 @@ class ProduitController extends Controller
 
         // Mise à jour du stock pour la boutique actuelle
         $boutique_id = $this->getBoutiqueId();
-        if ($request->has('prix_vente') || $request->has('prix_achat') || $request->has('quantite')) {
+        
+        // Handle snake_case or camelCase inputs
+        $prix_vente = $request->input('prix_vente') ?? $request->input('prixVente');
+        $prix_achat = $request->input('prix_achat') ?? $request->input('prixAchat');
+        $quantite = $request->input('quantite');
+
+        // Only update stock if relevant fields are present
+        if ($prix_vente !== null || $prix_achat !== null || $quantite !== null) {
             $stock = Stock::where('produit_id', $produit->id)->where('boutique_id', $boutique_id)->first();
-            
-            $prix_vente = $request->input('prix_vente') ?? $request->input('prixVente');
-            $prix_achat = $request->input('prix_achat') ?? $request->input('prixAchat');
             
             if ($stock) {
                 $stock->update([
                     'prix_vente' => $prix_vente ?? $stock->prix_vente,
                     'prix_achat' => $prix_achat ?? $stock->prix_achat,
-                    'quantite' => $request->input('quantite', $stock->quantite),
+                    'quantite' => $quantite ?? $stock->quantite,
                 ]);
             } else {
                 Stock::create([
                     'produit_id' => $produit->id,
                     'boutique_id' => $boutique_id,
-                    'quantite' => $request->input('quantite', 0),
+                    'quantite' => $quantite ?? 0,
                     'prix_achat' => $prix_achat ?? 0,
                     'prix_vente' => $prix_vente ?? 0,
+                    'date_reapprovisionnement' => now()->format('Y-m-d')
                 ]);
             }
         }
 
         return response()->json(['message' => 'Produit modifié avec succès', 'produit' => $produit], 200);
-    }
-
-    public function summary()
-    {
-        $boutique_id = $this->getBoutiqueId();
-
-        $produit_count = Stock::where('boutique_id', $boutique_id)->where('quantite', '>', 0)->count();
-        $total_stock = Stock::where('boutique_id', $boutique_id)
-            ->selectRaw('SUM(quantite * prix_vente) as total')
-            ->first()->total ?? 0;
-
-        $ventes_jour = DB::table('ventes')
-            ->where('boutique_id', $boutique_id)
-            ->where('statut', 'validee')
-            ->whereRaw("date_vente = ?", [Carbon::today()->format('Y-m-d')])
-            ->count();
-
-        $categorie_count = \App\Models\Categorie::where('boutique_id', $boutique_id)
-            ->orWhereNull('boutique_id')
-            ->count();
-
-        return response()->json([
-            'produit_count' => $produit_count,
-            'total_stock' => (float)$total_stock,
-            'ventes_jour' => $ventes_jour,
-            'categorie_count' => $categorie_count,
-            'annee_active' => now()->year
-        ], 200);
     }
 
     public function importCSV(Request $request)
@@ -406,7 +382,10 @@ class ProduitController extends Controller
                 'reference' => $data['reference'] ?? null,
                 'categorie_id' => $request->input('categorie_id'),
                 'description' => $data['description'] ?? '',
-                'image' => asset('storage/produit/default.png')
+                'image' => asset('storage/produit/default.png'),
+                'prix_detail' => $data['prix_detail'] ?? $data['prix_vente'] ?? 0,
+                'prix_master' => $data['prix_master'] ?? null
+
             ]);
 
             Stock::create([
@@ -434,6 +413,38 @@ class ProduitController extends Controller
         fclose($handle);
 
         return response()->json(['message' => "$count produits importés avec succès"], 201);
+    }
+
+    public function summary()
+    {
+        $boutique_id = $this->getBoutiqueId();
+
+        $produit_count = Stock::where('boutique_id', $boutique_id)
+            ->whereHas('produit')
+            ->where('quantite', '>', 0)
+            ->count();
+        $total_stock = Stock::where('boutique_id', $boutique_id)
+            ->whereHas('produit')
+            ->selectRaw('SUM(quantite * prix_vente) as total')
+            ->first()->total ?? 0;
+
+        $ventes_jour = DB::table('ventes')
+            ->where('boutique_id', $boutique_id)
+            ->whereIn('statut', ['validee', 'payee', 'credit'])
+            ->whereRaw("date_vente = ?", [Carbon::today()->format('Y-m-d')])
+            ->count();
+
+        $categorie_count = \App\Models\Categorie::where('boutique_id', $boutique_id)
+            ->orWhereNull('boutique_id')
+            ->count();
+
+        return response()->json([
+            'produit_count' => $produit_count,
+            'total_stock' => (float)$total_stock,
+            'ventes_jour' => $ventes_jour,
+            'categorie_count' => $categorie_count,
+            'annee_active' => now()->year
+        ], 200);
     }
 
     /**
@@ -502,9 +513,15 @@ class ProduitController extends Controller
 
         $produit->restore();
 
-        if ($request->has('quantite')) {
+        if ($request->has('quantite') != 0) {
             $stock->update([
                 'quantite' => $request->quantite,
+                'date_reapprovisionnement' => now()->format('Y-m-d')
+            ]);
+        }else{
+
+            $stock->update([
+                'quantite' => $produit->quantite,
                 'date_reapprovisionnement' => now()->format('Y-m-d')
             ]);
         }

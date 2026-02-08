@@ -18,7 +18,7 @@ use App\Http\Controllers\Admin\SuperAdminController;
 |--------------------------------------------------------------------------
 */
 
-Route::domain('admin.maboutique.tech')->group(function () {
+// Route::domain('admin.maboutique.tech')->group(function () {
 // Password Reset Routes
 Route::get('password/reset', [App\Http\Controllers\Auth\PasswordResetController::class, 'showLinkRequestForm'])->name('password.request');
 Route::post('password/email', [App\Http\Controllers\Auth\PasswordResetController::class, 'sendResetLinkEmail'])->name('password.email');
@@ -56,7 +56,7 @@ Route::get('/loginAdmin', function () {
 Route::post('/loginAdmin', [SuperAdminController::class, 'login'])->name('admin.login');
 Route::post('/logoutAdmin', [SuperAdminController::class, 'logout'])->name('logout');
 
-});
+// });
 /*
 |--------------------------------------------------------------------------
 | Catch-all route pour Angular (frontend)

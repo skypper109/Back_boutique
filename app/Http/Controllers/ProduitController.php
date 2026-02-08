@@ -241,10 +241,8 @@ class ProduitController extends Controller
             'description' => $request->input('description'),
             'categorie_id' => $request->input('categorie_id'),
             'image' => $imagePath,
-            'prix_detail' => $request->input('prix_detail'),
             'prix_master' => $request->input('prix_master'),
-            'date_achat' => $request->input('date_achat') ?? $request->input('dateAchat'),
-            'date_fin_garantie' => $request->input('date_fin_garantie'),
+            'prix_detail' => $request->input('prix_detail'),
         ]);
 
         $produitId = $produit->id;
@@ -354,6 +352,9 @@ class ProduitController extends Controller
         $file = $request->file('file');
         $handle = fopen($file->getRealPath(), 'r');
 
+        // Expected header as per user request
+        $expectedHeader = ['nom', 'reference', 'prix_achat', 'prix_vente', 'prix_master', 'quantite', 'description'];
+
         // Read headers and remove BOM if present
         $headersString = fgets($handle);
         $headersString = str_replace("\xEF\xBB\xBF", '', $headersString);
@@ -361,6 +362,16 @@ class ProduitController extends Controller
 
         // Clean headers (trim spaces)
         $headers = array_map('trim', $headers);
+
+        // Strict header validation
+        if ($headers !== $expectedHeader) {
+            fclose($handle);
+            return response()->json([
+                'message' => "L'entête du fichier est incorrecte.",
+                'error' => "Format attendu: " . implode(';', $expectedHeader),
+                'received' => implode(';', $headers)
+            ], 422);
+        }
 
         $user = Auth::user();
         $boutique_id = $this->getBoutiqueId();
@@ -385,7 +396,6 @@ class ProduitController extends Controller
                 'image' => asset('storage/produit/default.png'),
                 'prix_detail' => $data['prix_detail'] ?? $data['prix_vente'] ?? 0,
                 'prix_master' => $data['prix_master'] ?? null
-
             ]);
 
             Stock::create([
@@ -411,6 +421,10 @@ class ProduitController extends Controller
         }
 
         fclose($handle);
+
+        if ($count === 0) {
+            return response()->json(['message' => "Aucun produit n'a pu être importé. Vérifiez le contenu du fichier."], 400);
+        }
 
         return response()->json(['message' => "$count produits importés avec succès"], 201);
     }

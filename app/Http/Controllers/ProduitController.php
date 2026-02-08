@@ -385,7 +385,6 @@ class ProduitController extends Controller
             if (count($headers) !== count($row)) {
                 continue;
             }
-
             $data = array_combine($headers, $row);
 
             $produit = Produit::create([

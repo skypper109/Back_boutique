@@ -26,7 +26,7 @@ class ProduitController extends Controller
             $query->where('boutique_id', $boutique_id);
         }])
             ->whereHas('stock', function ($query) use ($boutique_id) {
-                $query->where('quantite', '>', 0)->where('boutique_id', $boutique_id);
+                $query->where('boutique_id', $boutique_id);
             })
             ->orderBy('id', 'desc')->get();
         return response()->json($produits, 200);

@@ -17,8 +17,11 @@ class PdfController extends Controller
     public function generatePdf(Request $request)
     {
         $request->validate([
-            'type' => 'required|in:facture,bordereau,recu_credit,inventaire',
-            'id' => 'required|integer'
+            'type' => 'required|in:facture,bordereau,recu_credit,inventaire,rapport_journalier',
+            'id' => 'required|integer',
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date',
+            'produit_id' => 'nullable|integer'
         ]);
 
         $type = $request->input('type');
@@ -34,6 +37,7 @@ class PdfController extends Controller
                 'bordereau' => 'pdf.bordereau',
                 'recu_credit' => 'pdf.recu_credit',
                 'inventaire' => 'pdf.inventaire',
+                'rapport_journalier' => 'pdf.rapport_journalier',
             };
 
             // Configure PDF options
@@ -72,6 +76,7 @@ class PdfController extends Controller
                 'bordereau' => 'pdf.bordereau',
                 'recu_credit' => 'pdf.recu_credit',
                 'inventaire' => 'pdf.inventaire',
+                'rapport_journalier' => 'pdf.rapport_journalier',
             };
 
             $orientation = $type === 'inventaire' ? 'landscape' : 'portrait';
@@ -123,18 +128,23 @@ class PdfController extends Controller
                 ];
 
             case 'inventaire':
-                // Get boutique
                 $boutique = $boutiqueId 
                     ? Boutique::findOrFail($boutiqueId)
                     : Boutique::first();
 
-                // Get inventaires for this boutique
+                // Get filters from request (passed from generatePdf)
+                $startDate = request('start_date');
+                $endDate = request('end_date');
+                $produitId = request('produit_id');
+
                 $inventaires = Inventaire::with(['produit.stock', 'user'])
                     ->where('boutique_id', $boutique->id)
+                    ->when($startDate, fn($q) => $q->whereDate('created_at', '>=', $startDate))
+                    ->when($endDate, fn($q) => $q->whereDate('created_at', '<=', $endDate))
+                    ->when($produitId, fn($q) => $q->where('produit_id', $produitId))
                     ->orderBy('created_at', 'desc')
                     ->get();
 
-                // Calculate stats
                 $stats = [
                     'totalEntrees' => $inventaires->where('type', 'ajout')->sum('quantite'),
                     'totalSorties' => $inventaires->where('type', 'retrait')->sum('quantite'),
@@ -156,6 +166,10 @@ class PdfController extends Controller
                     'boutique' => $boutique,
                     'inventaires' => $inventaires,
                     'stats' => $stats,
+                    'filters' => [
+                        'start_date' => $startDate ? \Carbon\Carbon::parse($startDate)->format('d/m/Y') : null,
+                        'end_date' => $endDate ? \Carbon\Carbon::parse($endDate)->format('d/m/Y') : null,
+                    ],
                     'date' => now()
                 ];
 

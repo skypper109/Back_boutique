@@ -1,123 +1,233 @@
 @extends('pdf.layouts.base')
 
-@section('title', 'Inventaire')
+@section('title', 'Rapport d\'Audit Inventaire')
 @section('orientation', 'landscape')
 
 @section('styles')
     <style>
-        .inventaire-table {
-            width: 100%;
-            font-size: 8pt;
-            border-collapse: collapse;
-            margin-bottom: 10mm;
+        body {
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            color: #1a1a1a;
+            line-height: 1.4;
         }
 
-        .inventaire-table th {
-            background-color: #f1f5f9;
-            padding: 6px 8px;
-            border: 1px solid #e2e8f0;
-            font-size: 7pt;
-            font-weight: 900;
-            color: #64748b;
+        .inventory-header {
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 4px solid #34495e;
+        }
+
+        .company-name {
+            font-size: 24pt;
+            font-weight: 700;
+            color: #2c3e50;
+            margin: 0;
+            letter-spacing: -0.5px;
+        }
+
+        .report-title {
+            font-size: 18pt;
+            font-weight: 700;
+            color: #f39c12;
             text-transform: uppercase;
+            letter-spacing: 2px;
+            margin: 5px 0;
         }
 
-        .inventaire-table td {
-            padding: 6px 8px;
-            border: 1px solid #e2e8f0;
-            font-size: 8pt;
+        .report-meta {
+            font-size: 9pt;
+            color: #7f8c8d;
+            font-weight: 600;
         }
 
-        .inventaire-table tbody tr:nth-child(even) {
-            background-color: #f8fafc;
+        .stats-grid {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 25px;
         }
 
-        .stat-box {
-            background-color: #f8fafc;
-            border: 1px solid #f1f5f9;
-            border-radius: 10px;
-            padding: 10px;
+        .stat-card {
+            flex: 1;
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
             text-align: center;
         }
 
-        .stat-box.dark {
-            background-color: #0f172a;
+        .stat-card.primary {
+            background-color: #34495e;
+            border-color: #34495e;
             color: white;
-            border-color: #0f172a;
+        }
+
+        .stat-label {
+            display: block;
+            font-size: 8pt;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #7f8c8d;
+            margin-bottom: 5px;
+        }
+
+        .stat-card.primary .stat-label {
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .stat-value {
+            font-size: 16pt;
+            font-weight: 700;
+            margin: 0;
+        }
+
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+        }
+
+        .items-table thead {
+            background-color: #f8f9fa;
+        }
+
+        .items-table th {
+            padding: 10px 12px;
+            font-size: 8pt;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: #34495e;
+            border-bottom: 2px solid #dee2e6;
+            text-align: left;
+        }
+
+        .items-table td {
+            padding: 12px;
+            font-size: 9pt;
+            border-bottom: 1px solid #ecf0f1;
+        }
+
+        .type-badge {
+            font-size: 8pt;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 4px;
+            text-transform: uppercase;
+        }
+
+        .type-in {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .type-out {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+
+        .impact-value {
+            font-weight: 700;
+        }
+
+        .impact-positive {
+            color: #27ae60;
+        }
+
+        .impact-negative {
+            color: #c0392b;
+        }
+
+        .signature-section {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 40px;
+            padding-top: 20px;
+        }
+
+        .signature-box {
+            width: 30%;
+            text-align: center;
+        }
+
+        .signature-label {
+            font-size: 9pt;
+            font-weight: 700;
+            text-transform: uppercase;
+            border-bottom: 1px solid #34495e;
+            padding-bottom: 5px;
+            margin-bottom: 60px;
+        }
+
+        .footer {
+            text-align: center;
+            font-size: 8pt;
+            color: #bdc3c7;
+            margin-top: 40px;
+            font-style: italic;
         }
     </style>
 @endsection
 
 @section('content')
-    <div
-        style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10mm; padding-bottom: 8mm; border-bottom: 2px solid #0f172a;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start;" class="inventory-header">
         <div>
-            <h1 style="font-size: 18pt; font-weight: 900; text-transform: uppercase; margin-bottom: 3px;">Rapport d'Audit
-                Journalier</h1>
-            <p style="font-size: 7pt; font-weight: 900; color: #f59e0b; text-transform: uppercase; letter-spacing: 0.2em;">
-                Journal d'Inventaire & Mouvements de Stock
-            </p>
-        </div>
-        <div style="text-align: right;">
-            <p style="font-size: 14pt; font-weight: 900; margin-bottom: 5px;">{{ $boutique->nom ?? 'Ma Boutique' }}</p>
-            <div style="font-size: 7pt; font-weight: 700; color: #64748b;">
-                <p style="margin: 2px 0;">Période: {{ now()->format('d/m/Y') }}</p>
-                <p style="margin: 2px 0;">{{ count($inventaires) }} Opérations</p>
+            <h1 class="company-name">{{ $boutique->nom ?? 'Ma Boutique' }}</h1>
+            <h2 class="report-title">Audit d'Inventaire</h2>
+            <div class="report-meta">
+                Période : {{ $filters['start_date'] ?? 'Toutes' }} au {{ $filters['end_date'] ?? now()->format('d/m/Y') }}
             </div>
         </div>
-    </div>
-
-    <!-- Summary Grid -->
-    <div style="display: flex; gap: 10px; margin-bottom: 10mm;">
-        <div class="stat-box" style="flex: 1;">
-            <span
-                style="display: block; font-size: 7pt; font-weight: 900; color: #94a3b8; text-transform: uppercase; margin-bottom: 3px;">Total
-                Entrées</span>
-            <span style="font-size: 12pt; font-weight: 900;">{{ $stats['totalEntrees'] }} Unités</span>
-        </div>
-        <div class="stat-box" style="flex: 1;">
-            <span
-                style="display: block; font-size: 7pt; font-weight: 900; color: #94a3b8; text-transform: uppercase; margin-bottom: 3px;">Total
-                Sorties</span>
-            <span style="font-size: 12pt; font-weight: 900;">{{ $stats['totalSorties'] }} Unités</span>
-        </div>
-        <div class="stat-box" style="flex: 1;">
-            <span
-                style="display: block; font-size: 7pt; font-weight: 900; color: #94a3b8; text-transform: uppercase; margin-bottom: 3px;">Valeur
-                Entrante</span>
-            <span style="font-size: 12pt; font-weight: 900;">{{ number_format($stats['valeurAchatEntrante'], 0, ',', ' ') }}
-                F</span>
-        </div>
-        <div class="stat-box dark" style="flex: 1;">
-            <span
-                style="display: block; font-size: 7pt; font-weight: 900; color: rgba(255,255,255,0.5); text-transform: uppercase; margin-bottom: 3px;">Variation
-                Nette</span>
-            <span
-                style="font-size: 12pt; font-weight: 900;">{{ number_format($stats['valeurVenteSortante'] - $stats['valeurAchatEntrante'], 0, ',', ' ') }}
-                F</span>
+        <div style="text-align: right;">
+            <div style="font-size: 10pt; font-weight: 700; color: #2c3e50;">Document N° INF-{{ now()->format('YmdHi') }}
+            </div>
+            <div style="font-size: 8pt; color: #7f8c8d;">Généré le {{ now()->format('d/m/Y à H:i') }}</div>
         </div>
     </div>
 
-    <!-- Table Compacte -->
-    <table class="inventaire-table">
+    <div class="stats-grid">
+        <div class="stat-card">
+            <span class="stat-label">Total Entrées</span>
+            <p class="stat-value" style="color: #27ae60;">+{{ number_format($stats['totalEntrees'], 0) }}</p>
+        </div>
+        <div class="stat-card">
+            <span class="stat-label">Total Sorties</span>
+            <p class="stat-value" style="color: #c0392b;">-{{ number_format($stats['totalSorties'], 0) }}</p>
+        </div>
+        <div class="stat-card">
+            <span class="stat-label">Valeur Acquisition</span>
+            <p class="stat-value">{{ number_format($stats['valeurAchatEntrante'], 0, ',', ' ') }}
+                <small>{{ $boutique->devise ?? 'CFA' }}</small></p>
+        </div>
+        <div class="stat-card primary">
+            <span class="stat-label">Flux Net Stock</span>
+            <p class="stat-value">{{ number_format($stats['netMouvement'], 0) }} Unités</p>
+        </div>
+    </div>
+
+    <table class="items-table">
         <thead>
             <tr>
-                <th style="text-align: left;">Réf / Date</th>
-                <th style="text-align: left;">Article</th>
-                <th style="text-align: left;">Nature / Motif</th>
-                <th style="text-align: center;">Qté</th>
-                <th style="text-align: right;">Val. Unit</th>
-                <th style="text-align: right; font-weight: 900;">Impact</th>
+                <th style="width: 15%;">Date / Heure</th>
+                <th style="width: 25%;">Désignation Article</th>
+                <th style="width: 12%; text-align: center;">Nature</th>
+                <th style="width: 18%;">Motif / Description</th>
+                <th style="width: 10%; text-align: center;">Qté</th>
+                <th style="width: 10%; text-align: right;">Prix Unit.</th>
+                <th style="width: 10%; text-align: right;">Total</th>
             </tr>
         </thead>
         <tbody>
             @foreach ($inventaires as $item)
-                <tr style="font-style: italic;">
-                    <td>{{ $item->id }} - {{ \Carbon\Carbon::parse($item->created_at)->format('d/m H:i') }}</td>
-                    <td style="font-weight: 700;">{{ $item->produit->nom ?? 'N/A' }}</td>
-                    <td style="text-transform: uppercase;">{{ $item->description }}</td>
-                    <td
-                        style="text-align: center; font-weight: 900; color: {{ $item->type === 'retrait' ? '#dc2626' : '#16a34a' }};">
+                <tr>
+                    <td>{{ \Carbon\Carbon::parse($item->created_at)->format('d/m/Y H:i') }}</td>
+                    <td style="font-weight: 600;">{{ $item->produit->nom ?? 'N/A' }}</td>
+                    <td style="text-align: center;">
+                        <span class="type-badge {{ $item->type === 'retrait' ? 'type-out' : 'type-in' }}">
+                            {{ $item->type === 'retrait' ? 'Sortie' : 'Entrée' }}
+                        </span>
+                    </td>
+                    <td style="font-style: italic; font-size: 8pt; color: #7f8c8d;">{{ $item->description }}</td>
+                    <td style="text-align: center; font-weight: 700;"
+                        class="{{ $item->type === 'retrait' ? 'impact-negative' : 'impact-positive' }}">
                         {{ $item->type === 'retrait' ? '-' : '+' }}{{ $item->quantite }}
                     </td>
                     <td style="text-align: right;">
@@ -131,22 +241,23 @@
         </tbody>
     </table>
 
-    <!-- Signatures -->
-    <div style="display: flex; justify-content: space-between; gap: 50px; padding-top: 10mm;">
-        <div style="text-align: center; flex: 1;">
-            <p
-                style="font-size: 8pt; font-weight: 900; text-transform: uppercase; text-decoration: underline; margin-bottom: 60px;">
-                Le Responsable Stock</p>
+    <div class="signature-section">
+        <div class="signature-box">
+            <div class="signature-label">Gestionnaire de Stock</div>
+            <div style="font-size: 8pt; color: #bdc3c7; margin-top: 10px;">Date et Signature</div>
         </div>
-        <div style="text-align: center; flex: 1;">
-            <p
-                style="font-size: 8pt; font-weight: 900; text-transform: uppercase; text-decoration: underline; margin-bottom: 60px;">
-                Visa Direction / Audit</p>
+        <div class="signature-box">
+            <div class="signature-label">Audit Interne</div>
+            <div style="font-size: 8pt; color: #bdc3c7; margin-top: 10px;">Visa et Cachet</div>
+        </div>
+        <div class="signature-box">
+            <div class="signature-label">Direction Générale</div>
+            <div style="font-size: 8pt; color: #bdc3c7; margin-top: 10px;">Approbation Finale</div>
         </div>
     </div>
 
-    <p style="text-align: center; font-size: 7pt; color: #94a3b8; font-style: italic; margin-top: 15mm;">
-        Document d'audit officiel - {{ $boutique->nom ?? 'Ma Boutique' }} - Rapport généré le
-        {{ now()->format('d/m/Y H:i') }}
-    </p>
+    <div class="footer">
+        Ce document est un rapport d'audit officiel généré par le système de gestion Ma Boutique.
+        Toute altération rend ce document invalide.
+    </div>
 @endsection

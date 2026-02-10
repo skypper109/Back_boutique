@@ -122,6 +122,15 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/pdf/generate', [App\Http\Controllers\PdfController::class, 'generatePdf']);
     Route::get('/pdf/preview/{type}/{id}', [App\Http\Controllers\PdfController::class, 'previewPdf']);
 
+    // Daily Reports Routes
+    Route::prefix('rapports')->group(function () {
+        Route::get('/', [App\Http\Controllers\DailyReportController::class, 'index']);
+        Route::post('/generer', [App\Http\Controllers\DailyReportController::class, 'generate']);
+        Route::get('/{id}', [App\Http\Controllers\DailyReportController::class, 'show']);
+        Route::get('/{id}/download', [App\Http\Controllers\DailyReportController::class, 'download']);
+        Route::post('/{id}/envoyer', [App\Http\Controllers\DailyReportController::class, 'sendEmail']);
+    });
+
     Route::post('/boutiques/store-with-manager', [BoutiqueController::class, 'storeWithManager'])->middleware('role:admin');
     Route::apiResource('boutiques', BoutiqueController::class);
 

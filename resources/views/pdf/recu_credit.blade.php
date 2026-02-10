@@ -1,139 +1,352 @@
 @extends('pdf.layouts.base')
 
-@section('title', 'Reçu de Crédit')
+@section('title', 'Reçu de Paiement')
 
 @section('styles')
     <style>
-        .recu-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 15mm;
-            padding-bottom: 10mm;
-            border-bottom: 2px solid #0f172a;
+        body {
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            color: #1a1a1a;
+            line-height: 1.6;
+        }
+
+        .receipt-header {
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 3px solid #16a085;
+        }
+
+        .company-name {
+            font-size: 22pt;
+            font-weight: 700;
+            color: #16a085;
+            margin: 0 0 5px 0;
+            letter-spacing: -0.5px;
+        }
+
+        .company-tagline {
+            font-size: 9pt;
+            color: #7f8c8d;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin: 0 0 8px 0;
+        }
+
+        .company-details {
+            font-size: 8pt;
+            color: #7f8c8d;
+            line-height: 1.8;
+        }
+
+        .receipt-title {
+            font-size: 28pt;
+            font-weight: 700;
+            color: #16a085;
+            margin: 0;
+            letter-spacing: -1px;
+        }
+
+        .receipt-meta {
+            margin-top: 8px;
+        }
+
+        .receipt-number {
+            font-size: 12pt;
+            font-weight: 700;
+            color: #34495e;
+            margin: 3px 0;
+        }
+
+        .receipt-date {
+            font-size: 8pt;
+            color: #7f8c8d;
+            text-transform: uppercase;
+        }
+
+        .customer-box {
+            background-color: #ecf8f6;
+            border-left: 4px solid #16a085;
+            padding: 15px 20px;
+            margin: 25px 0;
+            border-radius: 4px;
+        }
+
+        .customer-label {
+            font-size: 8pt;
+            color: #7f8c8d;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+        }
+
+        .customer-name {
+            font-size: 14pt;
+            font-weight: 700;
+            color: #2c3e50;
+            margin: 0;
+        }
+
+        .customer-contact {
+            font-size: 9pt;
+            color: #7f8c8d;
+            margin-top: 3px;
+        }
+
+        .section-title {
+            font-size: 10pt;
+            font-weight: 700;
+            color: #34495e;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin: 25px 0 15px 0;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #ecf0f1;
         }
 
         .payments-table {
             width: 100%;
-            margin: 10mm 0;
+            margin: 15px 0;
             border-collapse: collapse;
         }
 
         .payments-table tr {
-            border-bottom: 1px solid #f1f5f9;
+            border-bottom: 1px solid #ecf0f1;
         }
 
         .payments-table td {
-            padding: 6px 8px;
+            padding: 12px 10px;
+            font-size: 10pt;
+        }
+
+        .payment-date {
+            color: #7f8c8d;
+            font-size: 9pt;
+        }
+
+        .payment-method {
+            display: inline-block;
+            background-color: #d5f4e6;
+            color: #0e6655;
+            padding: 3px 10px;
+            border-radius: 12px;
             font-size: 8pt;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+
+        .payment-amount {
+            text-align: right;
+            font-weight: 700;
+            color: #16a085;
+            font-size: 11pt;
+        }
+
+        .no-payments {
+            text-align: center;
+            padding: 30px 20px;
+            color: #95a5a6;
+            font-style: italic;
+            font-size: 10pt;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+
+        .summary-section {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 2px solid #ecf0f1;
+        }
+
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 15px;
+            font-size: 10pt;
+        }
+
+        .summary-label {
+            color: #7f8c8d;
+            font-weight: 600;
+        }
+
+        .summary-value {
+            color: #2c3e50;
+            font-weight: 700;
+        }
+
+        .paid-row {
+            color: #27ae60;
+            border-bottom: 1px solid #ecf0f1;
+            padding-bottom: 12px;
+            margin-bottom: 12px;
+        }
+
+        .balance-row {
+            background-color: #16a085;
+            color: white;
+            padding: 18px 20px;
+            border-radius: 8px;
+            margin-top: 12px;
+        }
+
+        .balance-label {
+            font-size: 9pt;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            opacity: 0.9;
+            margin-bottom: 5px;
+        }
+
+        .balance-amount {
+            font-size: 24pt;
+            font-weight: 700;
+            margin: 0;
+        }
+
+        .currency {
+            font-size: 11pt;
+            opacity: 0.7;
+            margin-left: 5px;
+        }
+
+        .notes-section {
+            background-color: #f8f9fa;
+            border-left: 4px solid #16a085;
+            padding: 12px 18px;
+            margin: 25px 0;
+            font-size: 9pt;
+            color: #7f8c8d;
+            line-height: 1.8;
+        }
+
+        .signature-section {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 40px;
+            padding-top: 25px;
+            border-top: 2px dashed #bdc3c7;
+        }
+
+        .signature-box {
+            text-align: center;
+            flex: 1;
+        }
+
+        .signature-label {
+            font-size: 9pt;
+            color: #95a5a6;
+            text-transform: uppercase;
+            font-weight: 600;
+            margin-bottom: 50px;
+        }
+
+        .footer-text {
+            text-align: center;
+            font-size: 8pt;
+            color: #bdc3c7;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-top: 25px;
+        }
+
+        .text-right {
+            text-align: right;
         }
     </style>
 @endsection
 
 @section('content')
-    <div class="recu-header">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start;" class="receipt-header">
         <div>
-            <h1 style="font-size: 20pt; font-weight: 700; margin-bottom: 5px;">{{ $boutique->nom ?? '-----' }}</h1>
-            <p
-                style="font-size: 7pt; font-weight: 700; color: #f59e0b; text-transform: uppercase; letter-spacing: 0.2em; margin-bottom: 8px;">
-                {{ $boutique->description_recu ?? 'REÇU DE PAIEMENT' }}
-            </p>
-            <div style="font-size: 7pt; font-weight: 700; color: #94a3b8; text-transform: uppercase;">
-                <p style="margin: 2px 0;">{{ $boutique->adresse ?? '-----' }}</p>
-                <p style="margin: 2px 0;">Tél: {{ $boutique->telephone ?? '-----' }}</p>
+            <h1 class="company-name">{{ $boutique->nom ?? 'Nom de votre Boutique' }}</h1>
+            <p class="company-tagline">{{ $boutique->description_recu ?? 'Reçu de Versement / Crédit' }}</p>
+            <div class="company-details">
+                <div>{{ $boutique->adresse ?? 'Adresse de la Boutique' }}</div>
+                <div>Tél: {{ $boutique->telephone ?? '+000 00 00 00 00' }}</div>
+                @if ($boutique->email)
+                    <div>Email: {{ $boutique->email }}</div>
+                @endif
             </div>
         </div>
         <div style="text-align: right;">
-            <h2 style="font-size: 20pt; font-weight: 900; margin-bottom: 5px;">REÇU</h2>
-            <div style="margin-top: 6px;">
-                <p style="font-size: 10pt; font-weight: 900; margin: 2px 0;">Vente N° {{ $vente->id }}</p>
-                <p style="font-size: 7pt; font-weight: 700; color: #94a3b8; text-transform: uppercase; margin: 2px 0;">
-                    {{ \Carbon\Carbon::parse($vente->date_vente)->format('d/m/Y') }}
-                </p>
+            <h2 class="receipt-title">REÇU</h2>
+            <div class="receipt-meta">
+                <div class="receipt-number">Vente N° {{ str_pad($vente->id, 6, '0', STR_PAD_LEFT) }}</div>
+                <div class="receipt-date">Le {{ \Carbon\Carbon::parse($vente->date_vente)->format('d/m/Y') }}</div>
             </div>
         </div>
     </div>
 
-    <div style="background-color: #f8fafc; padding: 12px; border-radius: 10px; margin-bottom: 10mm;">
-        <p style="font-size: 7pt; font-weight: 900; color: #94a3b8; text-transform: uppercase; margin-bottom: 5px;">Client
-        </p>
-        <p style="font-size: 12pt; font-weight: 700; margin: 0;">{{ $vente->client->nom ?? 'CLIENT DE PASSAGE' }}</p>
+    <div class="customer-box">
+        <div class="customer-label">Reçu de</div>
+        <div class="customer-name">{{ $vente->client->nom ?? 'Client de Passage' }}</div>
         @if ($vente->client && $vente->client->telephone)
-            <p style="font-size: 8pt; color: #64748b; margin: 2px 0;">{{ $vente->client->telephone }}</p>
+            <div class="customer-contact">{{ $vente->client->telephone }}</div>
         @endif
     </div>
 
-    <h3
-        style="font-size: 8pt; font-weight: 900; color: #cbd5e1; text-transform: uppercase; margin-bottom: 8px; text-decoration: underline;">
-        Relevé des versements
-    </h3>
+    <h3 class="section-title">Historique des Versements</h3>
 
     @if ($paiements && count($paiements) > 0)
         <table class="payments-table">
             @foreach ($paiements as $paiement)
                 <tr>
-                    <td style="color: #64748b; font-style: italic;">
-                        {{ \Carbon\Carbon::parse($paiement->date_paiement)->format('d/m/y') }} -
-                        {{ $paiement->mode_paiement }}
+                    <td style="width: 60%;">
+                        <span class="payment-date">Le
+                            {{ \Carbon\Carbon::parse($paiement->date_paiement)->format('d/m/Y') }}</span>
+                        <span class="payment-method">{{ strtoupper($paiement->mode_paiement) }}</span>
                     </td>
-                    <td style="text-align: right; font-weight: 900;">
+                    <td class="payment-amount">
                         {{ number_format($paiement->montant, 0, ',', ' ') }} {{ $boutique->devise ?? 'CFA' }}
                     </td>
                 </tr>
             @endforeach
         </table>
     @else
-        <p style="font-size: 8pt; color: #cbd5e1; font-style: italic; text-align: center; padding: 20px 0;">
-            En attente de versement
-        </p>
+        <div class="no-payments">
+            Aucun versement enregistré pour le moment
+        </div>
     @endif
 
-    <div style="margin-top: 15mm; padding-top: 10mm; border-top: 1px solid #f1f5f9;">
-        <div style="display: flex; justify-content: space-between; margin-bottom: 5mm;">
-            <div style="flex: 1;">
-                <div style="background-color: #f8fafc; padding: 10px; border-radius: 10px; font-size: 8pt;">
-                    {{ $boutique->footer_recu ?? 'Merci pour votre confiance. Ce reçu fait foi de paiement.' }}
-                </div>
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-top: 30px;">
+        <div style="flex: 1; margin-right: 30px;">
+            <div class="notes-section">
+                <strong style="display: block; margin-bottom: 8px; color: #2c3e50;">Conditions de Règlement</strong>
+                {{ $boutique->footer_recu ?? 'Merci pour votre versement. Ce reçu fait foi de paiement partiel ou total de votre dette. Veuillez le conserver précieusement.' }}
             </div>
-            <div style="width: 180px; margin-left: 20px;">
-                <div
-                    style="display: flex; justify-content: space-between; font-size: 8pt; font-weight: 700; color: #94a3b8; text-transform: uppercase; margin-bottom: 5px; padding: 0 8px;">
-                    <span>Total Général</span>
-                    <span style="color: #0f172a;">{{ number_format($vente->montant_total, 0, ',', ' ') }}</span>
+        </div>
+        <div style="width: 260px;">
+            <div class="summary-section">
+                <div class="summary-row">
+                    <span class="summary-label">Montant Total</span>
+                    <span class="summary-value">{{ number_format($vente->montant_total, 0, ',', ' ') }}</span>
                 </div>
-                <div
-                    style="display: flex; justify-content: space-between; font-size: 8pt; font-weight: 900; color: #10b981; text-transform: uppercase; margin-bottom: 8px; padding: 0 8px 8px; border-bottom: 1px solid #f1f5f9;">
-                    <span>Déjà Réglé</span>
-                    <span>- {{ number_format($vente->montant_total - $vente->montant_restant, 0, ',', ' ') }}</span>
+                <div class="summary-row paid-row">
+                    <span class="summary-label">Total Déjà Réglé</span>
+                    <span class="summary-value">-
+                        {{ number_format($vente->montant_total - $vente->montant_restant, 0, ',', ' ') }}</span>
                 </div>
-                <div
-                    style="background-color: #0f172a; color: white; padding: 12px 15px; border-radius: 15px; text-align: right;">
-                    <span
-                        style="display: block; font-size: 7pt; font-weight: 900; color: #f59e0b; text-transform: uppercase; margin-bottom: 3px;">RESTE
-                        A PAYER</span>
-                    <p style="font-size: 20pt; font-weight: 900; margin: 0;">
+                <div class="balance-row">
+                    <div class="balance-label">Reste à Payer</div>
+                    <div class="balance-amount">
                         {{ number_format($vente->montant_restant, 0, ',', ' ') }}
-                        <span style="font-size: 8pt; opacity: 0.4;">{{ $boutique->devise ?? 'CFA' }}</span>
-                    </p>
+                        <span class="currency">{{ $boutique->devise ?? 'CFA' }}</span>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <div
-        style="display: flex; justify-content: space-between; padding-top: 15mm; border-top: 1px dashed #e2e8f0; margin-top: 10mm;">
-        <div style="text-align: center; flex: 1;">
-            <p style="font-size: 8pt; font-weight: 900; text-transform: uppercase; color: #cbd5e1; margin-bottom: 50px;">Le
-                Responsable</p>
+    <div class="signature-section">
+        <div class="signature-box">
+            <div class="signature-label">Le Responsable</div>
         </div>
-        <div style="text-align: center; flex: 1;">
-            <p style="font-size: 8pt; font-weight: 900; text-transform: uppercase; color: #cbd5e1; margin-bottom: 50px;">Le
-                Client (Bon pour accord)</p>
+        <div class="signature-box">
+            <div class="signature-label">Accusé de Réception Client</div>
         </div>
     </div>
 
-    <p
-        style="text-align: center; font-size: 6pt; color: #e2e8f0; text-transform: uppercase; letter-spacing: 0.3em; margin-top: 10mm;">
-        DOCUMENT OFFICIEL - {{ strtoupper($boutique->nom ?? 'MA BOUTIQUE') }}
-    </p>
+    <div class="footer-text">
+        Reçu de Paiement Officiel • {{ strtoupper($boutique->nom ?? 'Ma Boutique') }}
+    </div>
 @endsection

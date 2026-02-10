@@ -14,7 +14,7 @@ use App\Http\Controllers\AnneeController;
 use App\Http\Controllers\UserStatusController;
 use App\Http\Controllers\{CreditController,ExpenseController};
 
-
+Route::middleware('api')->group(function () {
 // Auth Routes
 Route::post('/login', [AuthController::class, 'login'])->name('login');
 Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
@@ -134,4 +134,5 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/boutiques/store-with-manager', [BoutiqueController::class, 'storeWithManager'])->middleware('role:admin');
     Route::apiResource('boutiques', BoutiqueController::class);
 
+});
 });

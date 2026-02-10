@@ -183,7 +183,7 @@
         </div>
     </div>
 
-    <div class="stats-grid">
+    {{-- <div class="stats-grid">
         <div class="stat-card">
             <span class="stat-label">Total Entrées</span>
             <p class="stat-value" style="color: #27ae60;">+{{ number_format($stats['totalEntrees'], 0) }}</p>
@@ -201,7 +201,7 @@
             <span class="stat-label">Flux Net Stock</span>
             <p class="stat-value">{{ number_format($stats['netMouvement'], 0) }} Unités</p>
         </div>
-    </div>
+    </div> --}}
 
     <table class="items-table">
         <thead>

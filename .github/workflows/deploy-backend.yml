@@ -37,9 +37,9 @@ jobs:
             echo "Install dependencies"
             composer install --no-dev --optimize-autoloader --no-interaction
 
-            echo "Fix permissions"
-            sudo chown -R www-data:www-data storage bootstrap/cache
+            echo "🔐 Fix Laravel writable folders"
             sudo chmod -R 775 storage bootstrap/cache
+
 
             echo "Run migrations"
             php artisan migrate --force

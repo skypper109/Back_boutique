@@ -20,15 +20,29 @@ jobs:
 
       - name: Deploy to VPS
         run: |
-          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'EOF'
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << EOF
+            set -e
+
             cd /var/www/maboutique/backend
+
+            echo "📦 Pull latest code"
             git pull origin main
-            composer install --no-dev --optimize-autoloader
+
+            echo "📦 Install Composer dependencies"
+            composer install --no-dev --optimize-autoloader --no-interaction
+
+            echo "🔐 Fix permissions"
+            sudo chown -R www-data:www-data /var/www/maboutique/backend
+            sudo chmod -R 775 storage
+            sudo chmod -R 775 bootstrap/cache
+
+            echo "🗄 Run migrations"
             php artisan migrate --force
-            php artisan config:clear
+
+            echo "🧹 Clear and optimize cache"
             php artisan optimize:clear
-            php artisan optimize
             php artisan config:cache
-            php artisan route:clear
             php artisan route:cache
+
+            echo "✅ Deployment finished"
           EOF

@@ -20,6 +20,7 @@ return [
     'allowed_methods' => ['*'],
 
     'allowed_origins' => [
+        '*',
         'https://front.maboutique.tech',
         'https://admin.maboutique.tech',
         'http://localhost:4200',

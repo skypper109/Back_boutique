@@ -20,29 +20,34 @@ jobs:
 
       - name: Deploy to VPS
         run: |
-          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << EOF
+          ssh -T ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << EOF
             set -e
 
             cd /var/www/maboutique/backend
 
-            echo "📦 Pull latest code"
-            git pull origin main
+            echo "Reset git state"
+            git rebase --abort || true
+            rm -rf .git/rebase-merge || true
 
-            echo "📦 Install Composer dependencies"
+            echo "📦 Sync with origin/main"
+            git fetch origin
+            git reset --hard origin/main
+            echo "Code synced"
+
+            echo "Install dependencies"
             composer install --no-dev --optimize-autoloader --no-interaction
 
-            echo "🔐 Fix permissions"
-            sudo chown -R www-data:www-data /var/www/maboutique/backend
-            sudo chmod -R 775 storage
-            sudo chmod -R 775 bootstrap/cache
+            echo "Fix permissions"
+            sudo chown -R www-data:www-data storage bootstrap/cache
+            sudo chmod -R 775 storage bootstrap/cache
 
-            echo "🗄 Run migrations"
+            echo "Run migrations"
             php artisan migrate --force
 
-            echo "🧹 Clear and optimize cache"
+            echo "🧹 Optimize"
             php artisan optimize:clear
             php artisan config:cache
             php artisan route:cache
 
-            echo "✅ Deployment finished"
+            echo "Deployment finished"
           EOF

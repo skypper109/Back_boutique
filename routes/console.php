@@ -23,3 +23,8 @@ Artisan::command('auth:create-super-admin', function () {
         $this->info('Super Admin already exists.');
     }
 })->purpose('Create a Super Admin user')->hourly();
+
+Artisan::command('reports:schedule-daily', function () {
+    $this->info('Scheduling daily reports generation...');
+    Artisan::call('reports:generate-daily');
+})->purpose('Generate and send daily reports')->dailyAt('19:00');

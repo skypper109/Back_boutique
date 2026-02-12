@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    'whatsapp' => [
+        'url' => env('WHATSAPP_API_URL', 'http://localhost:8080'),
+        'key' => env('WHATSAPP_API_KEY'),
+        'instance' => env('WHATSAPP_INSTANCE', 'maboutique'),
+    ],
+
 ];

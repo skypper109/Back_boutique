@@ -83,6 +83,9 @@ class ProduitController extends Controller
                 'user_id' => $user->id,
                 'quantite' => $quantite,
                 'type' => 'ajout',
+                'prix_achat' => $prix_achat,
+                'prix_vente' => $prix_vente,
+                'remise' => 0,
                 'description' => 'Reapprovisionnement du produit ' . $prod,
                 'date' => now()->format('Y-m-d')
             ]);
@@ -137,29 +140,205 @@ class ProduitController extends Controller
         return response()->json($produits, 200);
     }
 
-    // Pour la methode qui nous recupere l'inventaires de l'ensemble des produits qui sont dans la table inventaire :
+    // Pour la methode qui nous recupere l'inventaire de l'ensemble des produits
     public function inventaire()
     {
-        // DB::statement("SET lc_time_names = 'fr_FR'");
         $boutique_id = $this->getBoutiqueId();
         $inventaires = Inventaire::with('produit.stock', 'user', 'boutique')
             ->whereHas('produit')
             ->where('boutique_id', $boutique_id)
-            ->orderBy('id', 'desc')->get();
-        return response()->json($inventaires, 200);
+            ->orderBy('created_at', 'desc')->get();
+
+        $payments = \App\Models\PaiementCredit::with(['vente.client', 'user'])
+            ->where('boutique_id', $boutique_id)
+            ->orderBy('date_paiement', 'desc')
+            ->get();
+
+        return $this->formatInventaireResponse($inventaires, $payments);
     }
 
-    // Pour la methode qui nous recupere l'inventaire des produits dans un intervalle de date :
+    // Pour la methode qui nous recupere l'inventaire dans un intervalle de date
     public function inventaireDate($dateDebut, $dateFin)
     {
-        // DB::statement("SET lc_time_names = 'fr_FR'");
-
         $boutique_id = $this->getBoutiqueId();
         $inventaires = Inventaire::with('produit.stock', 'user', 'boutique')
             ->where('boutique_id', $boutique_id)
             ->whereBetween('date', [$dateDebut, $dateFin])
             ->orderBy('created_at', 'desc')->get();
-        return response()->json($inventaires, 200);
+
+        $payments = \App\Models\PaiementCredit::with(['vente.client', 'user'])
+            ->where('boutique_id', $boutique_id)
+            ->whereBetween('date_paiement', [$dateDebut, $dateFin])
+            ->orderBy('date_paiement', 'desc')
+            ->get();
+
+        return $this->formatInventaireResponse($inventaires, $payments, $dateDebut, $dateFin);
+    }
+
+    private function formatInventaireResponse($inventaires, $payments, $dateDebut = null, $dateFin = null)
+    {
+        $stats = [
+            'totalEntrees' => 0,
+            'totalSorties' => 0,
+            'valeurAchatEntrante' => 0,
+            'valeurVenteSortante' => 0,
+            'recettesCredit' => 0,
+            'beneficeTheorique' => 0,
+            'netMouvement' => 0
+        ];
+
+        // Process payments
+        $formattedPayments = $payments->map(function($p) use (&$stats) {
+            $stats['recettesCredit'] += (float)$p->montant;
+            return array_merge($p->toArray(), [
+                'type' => 'paiement',
+                'date' => $p->date_paiement,
+                'isGroup' => false,
+                'impactNet' => (float)$p->montant,
+                'description' => "Reglement Credit #{$p->vente_id} (" . ($p->vente->client->nom ?? 'Client') . ")"
+            ]);
+        })->toArray();
+
+        // Group Inventaire
+        $groupedGroups = [];
+        $transactionMap = [];
+
+        foreach ($inventaires as $item) {
+            $groupKey = ($item->vente_id && $item->type !== 'paiement') ? "{$item->vente_id}_{$item->type}" : null;
+            
+            if ($groupKey) {
+                if (!isset($transactionMap[$groupKey])) {
+                    $isReturn = $item->type === 'ajout';
+                    $transactionMap[$groupKey] = [
+                        'isGroup' => true,
+                        'vente_id' => $item->vente_id,
+                        'date' => $item->date,
+                        'created_at' => $item->created_at,
+                        'type' => $item->type,
+                        'isReturn' => $isReturn,
+                        'description' => $item->description,
+                        'user' => $item->user,
+                        'items' => [],
+                        'totalQuantite' => 0,
+                        'totalRemise' => $isReturn ? 0 : (float)($item->remise ?? 0),
+                        'impactNet' => 0,
+                        'showDetails' => false
+                    ];
+                }
+                
+                $transactionMap[$groupKey]['items'][] = $item;
+                $transactionMap[$groupKey]['totalQuantite'] += $item->quantite;
+                
+                $pxAchat = $item->prix_achat ?? ($item->produit->stock->prix_achat ?? 0);
+                $pxVente = $item->prix_vente ?? ($item->produit->stock->prix_vente ?? 0);
+                $transactionMap[$groupKey]['impactNet'] += ($item->quantite * ($pxVente - $pxAchat));
+            } else {
+                $itemArray = $item->toArray();
+                $pxAchat = $item->prix_achat ?? ($item->produit->stock->prix_achat ?? 0);
+                $pxVente = $item->prix_vente ?? ($item->produit->stock->prix_vente ?? 0);
+                $remise = (float)($item->remise ?? 0);
+                
+                if ($item->type === 'retrait') {
+                    $impact = (($item->quantite * $pxVente) - $remise) - ($item->quantite * $pxAchat);
+                } else {
+                    $impact = ($item->quantite * $pxAchat);
+                }
+                
+                $groupedGroups[] = array_merge($itemArray, [
+                    'isGroup' => false,
+                    'impactNet' => $impact
+                ]);
+            }
+        }
+
+        // Finalize groups and update global stats
+        foreach ($transactionMap as $key => &$g) {
+            if ($g['isReturn']) {
+                $g['description'] = count($g['items']) > 1 ? "Retour Groupé #{$g['vente_id']} (" . count($g['items']) . " articles)" : $g['items'][0]->description;
+                
+                // Deduction from global stats for returns
+                $stats['totalSorties'] -= $g['totalQuantite'];
+                $valVente = 0;
+                foreach($g['items'] as $it) {
+                    $pxV = $it->prix_vente ?? ($it->produit->stock->prix_vente ?? 0);
+                    $valVente += ($it->quantite * $pxV);
+                }
+                $stats['valeurVenteSortante'] -= $valVente;
+                $stats['beneficeTheorique'] -= $g['impactNet'];
+            } else {
+                $g['impactNet'] -= $g['totalRemise'];
+                if (count($g['items']) > 1) {
+                    $g['description'] = "Vente Groupée #{$g['vente_id']} (" . count($g['items']) . " articles)";
+                }
+                
+                // Addition to global stats for sales (retrait)
+                if ($g['type'] === 'retrait') {
+                    $stats['totalSorties'] += $g['totalQuantite'];
+                    $valVente = 0;
+                    foreach($g['items'] as $it) {
+                        $pxV = $it->prix_vente ?? ($it->produit->stock->prix_vente ?? 0);
+                        $valVente += ($it->quantite * $pxV);
+                    }
+                    $stats['valeurVenteSortante'] += ($valVente - $g['totalRemise']);
+                    $stats['beneficeTheorique'] += $g['impactNet'];
+                } else {
+                    // Purchase entry
+                    $stats['totalEntrees'] += $g['totalQuantite'];
+                    $valAchat = 0;
+                    foreach($g['items'] as $it) {
+                        $pxA = $it->prix_achat ?? ($it->produit->stock->prix_achat ?? 0);
+                        $valAchat += ($it->quantite * $pxA);
+                    }
+                    $stats['valeurAchatEntrante'] += $valAchat;
+                }
+            }
+            $groupedGroups[] = $g;
+        }
+
+        // Finalize individual item stats
+        foreach ($groupedGroups as $item) {
+            if (isset($item['isGroup']) && $item['isGroup']) continue;
+            if ($item['type'] === 'paiement') continue;
+
+            $pxAchat = $item['prix_achat'] ?? ($item['produit']['stock']['prix_achat'] ?? 0);
+            $pxVente = $item['prix_vente'] ?? ($item['produit']['stock']['prix_vente'] ?? 0);
+            $remise = (float)($item['remise'] ?? 0);
+            $qte = (float)$item['quantite'];
+
+            if ($item['type'] === 'retrait') {
+                $stats['totalSorties'] += $qte;
+                $isCreditSale = stripos($item['description'] ?? '', 'credit') !== false;
+                if (!$isCreditSale) {
+                    $stats['valeurVenteSortante'] += (($qte * $pxVente) - $remise);
+                }
+                $stats['beneficeTheorique'] += $item['impactNet'];
+            } else {
+                if (isset($item['vente_id']) && $item['vente_id']) {
+                    $stats['totalSorties'] -= $qte;
+                    $stats['valeurVenteSortante'] -= ($qte * $pxVente);
+                    $stats['beneficeTheorique'] -= (($qte * $pxVente) - ($qte * $pxAchat));
+                } else {
+                    $stats['totalEntrees'] += $qte;
+                    $stats['valeurAchatEntrante'] += ($qte * $pxAchat);
+                }
+            }
+        }
+
+        $stats['netMouvement'] = $stats['totalEntrees'] - $stats['totalSorties'];
+
+        // Combine and sort finally by date
+        $finalList = array_merge($groupedGroups, $formattedPayments);
+        usort($finalList, function($a, $b) {
+            $dateA = $a['date'] ?? $a['created_at'];
+            $dateB = $b['date'] ?? $b['created_at'];
+            return strcmp($dateB, $dateA);
+        });
+
+        return response()->json([
+            'items' => $finalList,
+            'stats' => $stats,
+            'boutique' => count($inventaires) > 0 ? $inventaires[0]->boutique : null
+        ], 200);
     }
 
     /**
@@ -255,6 +434,9 @@ class ProduitController extends Controller
             'user_id' => $user->id,
             'quantite' => $request->input('quantite'),
             'type' => 'ajout',
+            'prix_achat' => $request->input('prix_achat'),
+            'prix_vente' => $request->input('prix_vente'),
+            'remise' => 0,
             'description' => "Initialisation du produit " . $request->input('nom'),
             'date' => now()->format('Y-m-d')
         ]);
@@ -412,6 +594,9 @@ class ProduitController extends Controller
                 'user_id' => $user->id,
                 'quantite' => $data['quantite'] ?? 0,
                 'type' => 'ajout',
+                'prix_achat' => $data['prix_achat'] ?? 0,
+                'prix_vente' => $data['prix_vente'] ?? 0,
+                'remise' => 0,
                 'description' => "Importation CSV",
                 'date' => now()->format('Y-m-d')
             ]);

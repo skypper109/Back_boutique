@@ -103,6 +103,35 @@ class PdfController extends Controller
 
         switch ($type) {
             case 'facture':
+                // Check if the ID belongs to a Facture model grouping multiple sales
+                $facture = \App\Models\Facture::with(['factureVentes.vente.detailVentes.produit', 'client', 'boutique'])
+                    ->find($id);
+
+                if ($facture && $facture->factureVentes->isNotEmpty()) {
+                    // Use the first vente for basic template info, but we should ideally use the facture data
+                    $vente = $facture->factureVentes->first()->vente;
+                    // Ensure the vente object has the correct total and client from facture if they differ
+                    $vente->montant_total = $facture->montant_total;
+                    // Collect all details from all sales in the facture for the total view
+                    $allDetails = collect();
+                    foreach($facture->factureVentes as $fv) {
+                        if($fv->vente) {
+                            $allDetails = $allDetails->concat($fv->vente->detailVentes);
+                        }
+                    }
+                    $vente->setRelation('detailVentes', $allDetails);
+                } else {
+                    $vente = Vente::with(['detailVentes.produit', 'client', 'user', 'boutique'])
+                        ->when($boutiqueId, fn($q) => $q->where('boutique_id', $boutiqueId))
+                        ->findOrFail($id);
+                }
+                
+                return [
+                    'vente' => $vente,
+                    'boutique' => $vente->boutique,
+                    'type' => $type,
+                    'date' => now()
+                ];
             case 'bordereau':
                 $vente = Vente::with(['detailVentes.produit', 'client', 'user', 'boutique'])
                     ->when($boutiqueId, fn($q) => $q->where('boutique_id', $boutiqueId))
@@ -137,7 +166,7 @@ class PdfController extends Controller
                 $endDate = request('end_date');
                 $produitId = request('produit_id');
 
-                $inventaires = Inventaire::with(['produit.stock', 'user'])
+                $inventaires = \App\Models\Inventaire::with(['produit.stock', 'user'])
                     ->where('boutique_id', $boutique->id)
                     ->when($startDate, fn($q) => $q->whereDate('created_at', '>=', $startDate))
                     ->when($endDate, fn($q) => $q->whereDate('created_at', '<=', $endDate))
@@ -172,6 +201,16 @@ class PdfController extends Controller
                     ],
                     'date' => now()
                 ];
+
+            case 'rapport_journalier':
+                $report = \App\Models\DailyReport::with('boutique')->findOrFail($id);
+                $date = $report->date->format('Y-m-d');
+                
+                // Utilisation de la logique de DailyReportController pour plus de cohérence
+                $controller = new DailyReportController();
+                $data = $controller->loadReportData($report->boutique_id, $date);
+                
+                return $data;
 
             default:
                 throw new \Exception('Type de document invalide');

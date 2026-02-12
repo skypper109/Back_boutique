@@ -40,275 +40,216 @@
             text-transform: uppercase;
         }
 
-        .report-table td {
-            padding: 6px;
-            border-bottom: 1px solid #f1f5f9;
-            font-size: 7pt;
+        border-collapse: collapse;
+        table-layout: fixed;
+        margin-top: 10px;
+        margin-bottom: 20px;
         }
 
-        .report-table tbody tr:nth-child(even) {
-            background-color: #f8fafc;
+        .excel-table th,
+        .excel-table td {
+            border: 1px solid #000;
+            padding: 5px;
+            word-wrap: break-word;
         }
 
-        .subtotal-row {
-            background-color: #e2e8f0 !important;
-            font-weight: 900;
-        }
-
-        .subtotal-row td {
-            padding: 10px 6px;
-            font-size: 9pt;
-            border-top: 2px solid #0f172a;
-        }
-
-        .summary-grid {
-            display: flex;
-            justify-content: space-between;
-            gap: 10px;
-            margin-top: 20mm;
-        }
-
-        .summary-box {
-            flex: 1;
-            padding: 12px;
-            border-radius: 10px;
-            text-align: center;
-        }
-
-        .summary-box.ventes {
-            background-color: #10b981;
-            color: white;
-        }
-
-        .summary-box.depenses {
-            background-color: #ef4444;
-            color: white;
-        }
-
-        .summary-box.benefice {
-            background-color: #0f172a;
-            color: white;
-        }
-
-        .summary-label {
-            font-size: 7pt;
-            font-weight: 700;
+        .excel-table th {
+            background-color: #e0e0e0;
+            font-weight: bold;
             text-transform: uppercase;
-            opacity: 0.8;
-            margin-bottom: 3px;
+            font-size: 7.5pt;
         }
 
-        .summary-value {
-            font-size: 20pt;
-            font-weight: 900;
-        }
-
-        .stats-grid {
-            display: flex;
-            justify-content: space-around;
-            margin-top: 10mm;
+        .header-box {
+            border: 2px solid #000;
             padding: 10px;
-            background-color: #f8fafc;
-            border-radius: 10px;
+            margin-bottom: 15px;
         }
 
-        .stat-item {
+        .section-title {
+            background-color: #444;
+            color: #fff;
+            padding: 5px 10px;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 9pt;
+            margin-top: 20px;
+        }
+
+        .zebra tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+
+        .text-right {
+            text-align: right;
+        }
+
+        .text-center {
             text-align: center;
         }
 
-        .stat-label {
-            font-size: 6pt;
-            font-weight: 700;
-            color: #94a3b8;
-            text-transform: uppercase;
+        .font-bold {
+            font-weight: bold;
         }
 
-        .stat-value {
-            font-size: 12pt;
-            font-weight: 900;
-            color: #0f172a;
-            margin-top: 2px;
+        .bg-grey {
+            background-color: #eee;
         }
     </style>
 @endsection
 
 @section('content')
-    <div class="report-header">
-        <div style="text-align: left;">
-            <h1 style="font-size: 28pt; font-weight: 900; margin-bottom: 5px;">{{ $boutique->nom ?? '-----' }}</h1>
-            <p style="font-size: 8pt; font-weight: 700; color: #f59e0b; text-transform: uppercase; letter-spacing: 0.2em;">
-                RAPPORT JOURNALIER
-            </p>
-            <div style="font-size: 8pt; font-weight: 700; color: #94a3b8; margin-top: 5px;">
-                <p style="margin: 2px 0;">{{ $boutique->adresse ?? '-----' }}</p>
-                <p style="margin: 2px 0;">Tél: {{ $boutique->telephone ?? '-----' }}</p>
-            </div>
-        </div>
-        <div style="text-align: right;">
-            <h2 style="font-size: 18pt; font-weight: 900; margin-bottom: 5px; color: #0f172a;">
-                {{ \Carbon\Carbon::parse($date)->format('d/m/Y') }}
-            </h2>
-            <p style="font-size: 9pt; font-weight: 700; color: #94a3b8; text-transform: uppercase;">
-                {{ \Carbon\Carbon::parse($date)->locale('fr')->isoFormat('dddd') }}
-            </p>
-        </div>
+    <div class="header-box">
+        <table style="width: 100%; border: none;">
+            <tr>
+                <td style="width: 60%; border: none;">
+                    <div style="font-size: 14pt; font-weight: bold;">{{ $boutique->nom }}</div>
+                    <div>{{ $boutique->adresse }}</div>
+                    <div>Tél: {{ $boutique->telephone }}</div>
+                </td>
+                <td style="width: 40%; border: none; text-align: right; vertical-align: top;">
+                    <div style="font-weight: bold; font-size: 11pt;">RAPPORT D'AUDIT JOURNALIER</div>
+                    <div style="font-size: 12pt; font-weight: bold; margin-top: 5px;">
+                        {{ \Carbon\Carbon::parse($date)->format('d/m/Y') }}</div>
+                </td>
+            </tr>
+        </table>
     </div>
 
-    <h3 class="section-title">VENTES DE LA JOURNÉE</h3>
-
-    @if (count($ventes) > 0)
-        <table class="report-table">
-            <thead>
+    <div class="section-title">I. ÉTAT DES VENTES DE LA JOURNÉE</div>
+    <table class="excel-table zebra">
+        <thead>
+            <tr>
+                <th style="width: 5%;">ID</th>
+                <th style="width: 15%;">CLIENT</th>
+                <th style="width: 8%;" class="text-center">PAYE</th>
+                <th style="width: 35%;">ARTICLES VENDUS</th>
+                <th style="width: 7%;" class="text-center">QTÉ</th>
+                <th style="width: 10%;" class="text-right">BRUT</th>
+                <th style="width: 8%;" class="text-right">REM.</th>
+                <th style="width: 12%;" class="text-right">NET PERÇU</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach ($ventes as $vente)
                 <tr>
-                    <th style="text-align: left; width: 40px;">N°</th>
-                    <th style="text-align: left;">Client</th>
-                    <th style="text-align: center; width: 60px;">Paiement</th>
-                    <th style="text-align: left;">Produits</th>
-                    <th style="text-align: center; width: 40px;">Qté</th>
-                    <th style="text-align: right; width: 70px;">P.U.</th>
-                    <th style="text-align: right; width: 70px;">Montant</th>
-                    <th style="text-align: right; width: 60px;">Remise</th>
-                    <th style="text-align: right; width: 80px;">Net</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach ($ventes as $vente)
-                    <tr>
-                        <td style="font-weight: 900;">{{ $vente->id }}</td>
-                        <td style="font-weight: 700;">{{ $vente->client->nom ?? 'CLIENT DE PASSAGE' }}</td>
-                        <td style="text-align: center;">
-                            <span
-                                style="font-size: 6pt; font-weight: 900; padding: 2px 6px; border-radius: 5px; {{ $vente->type_paiement === 'credit' ? 'background-color: #fef3c7; color: #f59e0b;' : 'background-color: #d1fae5; color: #10b981;' }}">
-                                {{ $vente->type_paiement === 'credit' ? 'CRÉDIT' : 'CASH' }}
-                            </span>
-                        </td>
-                        <td>
-                            @foreach ($vente->detailVentes as $detail)
-                                <div style="margin: 1px 0;">
-                                    <span style="font-weight: 700;">{{ $detail->produit->nom }}</span>
-                                </div>
-                            @endforeach
-                        </td>
-                        <td style="text-align: center; font-weight: 700;">
-                            @foreach ($vente->detailVentes as $detail)
-                                <div style="margin: 1px 0;">{{ $detail->quantite }}</div>
-                            @endforeach
-                        </td>
-                        <td style="text-align: right;">
-                            @foreach ($vente->detailVentes as $detail)
-                                <div style="margin: 1px 0;">{{ number_format($detail->prix_unitaire, 0, ',', ' ') }}</div>
-                            @endforeach
-                        </td>
-                        <td style="text-align: right; font-weight: 700;">
-                            {{ number_format($vente->montant_total, 0, ',', ' ') }}
-                        </td>
-                        <td style="text-align: right; color: #10b981;">
-                            {{ $vente->montant_remis > 0 ? '-' . number_format($vente->montant_remis, 0, ',', ' ') : '-' }}
-                        </td>
-                        <td style="text-align: right; font-weight: 900;">
-                            {{ number_format($vente->montant_total - ($vente->montant_remis ?? 0), 0, ',', ' ') }}
-                        </td>
-                    </tr>
-                @endforeach
-                <tr class="subtotal-row">
-                    <td colspan="6" style="text-align: right; text-transform: uppercase;">TOTAL VENTES:</td>
-                    <td style="text-align: right;">{{ number_format($totaux['ventes_brut'], 0, ',', ' ') }}</td>
-                    <td style="text-align: right; color: #10b981;">
-                        -{{ number_format($totaux['remises'], 0, ',', ' ') }}
+                    <td class="text-center">{{ $vente->id }}</td>
+                    <td>{{ $vente->client->nom ?? 'CLIENT PASSAGE' }}</td>
+                    <td class="text-center font-bold" style="font-size: 7pt;">
+                        {{ $vente->type_paiement === 'credit' ? 'CRÉDIT' : 'CASH' }}
                     </td>
-                    <td style="text-align: right; font-size: 11pt;">
-                        {{ number_format($totaux['ventes_net'], 0, ',', ' ') }} {{ $boutique->devise ?? 'CFA' }}
+                    <td>
+                        @foreach ($vente->detailVentes as $detail)
+                            • {{ $detail->produit->nom }} (x{{ $detail->quantite }})<br>
+                        @endforeach
                     </td>
+                    <td class="text-center font-bold">{{ $vente->detailVentes->sum('quantite') }}</td>
+                    <td class="text-right">{{ number_format($vente->montant_total, 0, ',', ' ') }}</td>
+                    <td class="text-right text-red">{{ number_format($vente->montant_remis ?? 0, 0, ',', ' ') }}</td>
+                    <td class="text-right font-bold bg-grey">
+                        {{ number_format($vente->montant_total - ($vente->montant_remis ?? 0), 0, ',', ' ') }}</td>
                 </tr>
-            </tbody>
-        </table>
-    @else
-        <p style="text-align: center; padding: 20px; color: #94a3b8; font-style: italic;">Aucune vente enregistrée pour
-            cette journée</p>
-    @endif
+            @endforeach
+        </tbody>
+        <tfoot>
+            <tr class="bg-grey">
+                <td colspan="7" class="text-right font-bold">TOTAL VENTES NETTES (A)</td>
+                <td class="text-right font-bold" style="font-size: 10pt;">
+                    {{ number_format($totaux['ventes_net'], 0, ',', ' ') }}</td>
+            </tr>
+        </tfoot>
+    </table>
 
-    <h3 class="section-title">💰 DÉPENSES DE LA JOURNÉE</h3>
-
-    @if (count($depenses) > 0)
-        <table class="report-table">
-            <thead>
-                <tr>
-                    <th style="text-align: left; width: 40px;">N°</th>
-                    <th style="text-align: left; width: 100px;">Type</th>
-                    <th style="text-align: left;">Description</th>
-                    <th style="text-align: right; width: 100px;">Montant</th>
-                    <th style="text-align: left; width: 100px;">Enregistré par</th>
-                </tr>
-            </thead>
-            <tbody>
+    <div class="section-title">II. ÉTAT DES DÉPENSES DE LA JOURNÉE</div>
+    <table class="excel-table zebra">
+        <thead>
+            <tr>
+                <th style="width: 10%;">HEURE</th>
+                <th style="width: 25%;">CATÉGORIE</th>
+                <th style="width: 45%;">MOTIF / DESCRIPTION</th>
+                <th style="width: 20%;" class="text-right">MONTANT DÉPENSÉ</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (count($depenses) > 0)
                 @foreach ($depenses as $depense)
                     <tr>
-                        <td style="font-weight: 900;">{{ $depense->id }}</td>
-                        <td style="font-weight: 700; text-transform: uppercase;">{{ $depense->type }}</td>
-                        <td>{{ $depense->description ?? '-' }}</td>
-                        <td style="text-align: right; font-weight: 900; color: #ef4444;">
-                            {{ number_format($depense->montant, 0, ',', ' ') }}
-                        </td>
-                        <td>{{ $depense->user->name ?? '-' }}</td>
+                        <td class="text-center">{{ \Carbon\Carbon::parse($depense->created_at)->format('H:i') }}</td>
+                        <td class="font-bold">{{ $depense->category->name ?? 'DIVERS' }}</td>
+                        <td>{{ $depense->description }}</td>
+                        <td class="text-right font-bold red" style="color: #c00;">
+                            {{ number_format($depense->amount, 0, ',', ' ') }}</td>
                     </tr>
                 @endforeach
-                <tr class="subtotal-row">
-                    <td colspan="3" style="text-align: right; text-transform: uppercase;">TOTAL DÉPENSES:</td>
-                    <td style="text-align: right; font-size: 11pt; color: #ef4444;">
-                        {{ number_format($totaux['depenses'], 0, ',', ' ') }} {{ $boutique->devise ?? 'CFA' }}
+            @else
+                <tr>
+                    <td colspan="4" class="text-center italic" style="padding: 20px;">AUCUNE DÉPENSE ENREGISTRÉE CE JOUR
                     </td>
-                    <td></td>
                 </tr>
-            </tbody>
+            @endif
+        </tbody>
+        <tfoot>
+            <tr class="bg-grey">
+                <td colspan="3" class="text-right font-bold">TOTAL DÉPENSES (B)</td>
+                <td class="text-right font-bold" style="font-size: 10pt; color: #c00;">
+                    {{ number_format($totaux['depenses'], 0, ',', ' ') }}</td>
+            </tr>
+        </tfoot>
+    </table>
+
+    <div class="section-title">III. RÉSUMÉ FINANCIRE & PERFORMANCE</div>
+    <table class="excel-table">
+        <tr>
+            <td class="bg-grey font-bold" style="width: 50%;">CHIFFRE D'AFFAIRE TOTAL (CASH + CRÉDIT)</td>
+            <td class="text-right font-bold" style="width: 50%; font-size: 10pt;">
+                {{ number_format($totaux['ventes_net'], 0, ',', ' ') }} {{ $boutique->devise }}</td>
+        </tr>
+        <tr>
+            <td class="bg-grey font-bold">CHARGES D'EXPLOITATION (DÉPENSES)</td>
+            <td class="text-right font-bold text-red" style="color: #c00;">-
+                {{ number_format($totaux['depenses'], 0, ',', ' ') }} {{ $boutique->devise }}</td>
+        </tr>
+        <tr style="background-color: #000; color: #fff;">
+            <td class="font-bold" style="font-size: 11pt;">BÉNÉFICE NET DE LA JOURNÉE (A - B)</td>
+            <td class="text-right font-bold" style="font-size: 14pt;">
+                {{ number_format($totaux['benefice_net'], 0, ',', ' ') }}
+                <small style="font-size: 9pt;">{{ $boutique->devise }}</small>
+            </td>
+        </tr>
+    </table>
+
+    <table class="excel-table" style="margin-top: 20px;">
+        <tr>
+            <th colspan="2">STATISTIQUES OPÉRATIONNELLES</th>
+        </tr>
+        <tr>
+            <td style="width: 50%;">Nombre de factures éditées :</td>
+            <td class="text-center font-bold">{{ $stats['nombre_ventes'] }}</td>
+        </tr>
+        <tr>
+            <td>Nombre de bons de dépense :</td>
+            <td class="text-center font-bold">{{ $stats['nombre_depenses'] }}</td>
+        </tr>
+    </table>
+
+    <div style="margin-top: 50px;">
+        <table style="width: 100%; border: none;">
+            <tr>
+                <td style="width: 50%; border: 2px solid #000; padding: 15px; height: 100px; vertical-align: top;">
+                    <div style="font-size: 8pt; font-weight: bold; text-transform: uppercase;">Visa du Gérant / Caissier :
+                    </div>
+                    <div style="margin-top: 10px; font-size: 7pt; font-style: italic;">{{ $boutique->nom }}</div>
+                </td>
+                <td style="width: 50%; border: 2px solid #000; padding: 15px; height: 100px; vertical-align: top;">
+                    <div style="font-size: 8pt; font-weight: bold; text-transform: uppercase;">Visa de la Direction / Audit
+                        :</div>
+                </td>
+            </tr>
         </table>
-    @else
-        <p style="text-align: center; padding: 20px; color: #94a3b8; font-style: italic;">Aucune dépense enregistrée pour
-            cette journée</p>
-    @endif
-
-    <div class="summary-grid">
-        <div class="summary-box ventes">
-            <div class="summary-label">Total Ventes</div>
-            <div class="summary-value">{{ number_format($totaux['ventes_net'], 0, ',', ' ') }}</div>
-            <div style="font-size: 7pt; opacity: 0.8;">{{ $boutique->devise ?? 'CFA' }}</div>
-        </div>
-        <div class="summary-box depenses">
-            <div class="summary-label">Total Dépenses</div>
-            <div class="summary-value">{{ number_format($totaux['depenses'], 0, ',', ' ') }}</div>
-            <div style="font-size: 7pt; opacity: 0.8;">{{ $boutique->devise ?? 'CFA' }}</div>
-        </div>
-        <div class="summary-box benefice">
-            <div class="summary-label">Bénéfice Net</div>
-            <div class="summary-value">{{ number_format($totaux['benefice_net'], 0, ',', ' ') }}</div>
-            <div style="font-size: 7pt; opacity: 0.8;">{{ $boutique->devise ?? 'CFA' }}</div>
-        </div>
-    </div>
-
-    <div class="stats-grid">
-        <div class="stat-item">
-            <div class="stat-label">Nombre de Ventes</div>
-            <div class="stat-value">{{ $stats['nombre_ventes'] }}</div>
-        </div>
-        <div class="stat-item">
-            <div class="stat-label">Nombre de Dépenses</div>
-            <div class="stat-value">{{ $stats['nombre_depenses'] }}</div>
-        </div>
-        <div class="stat-item">
-            <div class="stat-label">Vente Moyenne</div>
-            <div class="stat-value">{{ number_format($stats['vente_moyenne'], 0, ',', ' ') }}</div>
-        </div>
-        <div class="stat-item">
-            <div class="stat-label">Ventes Crédit</div>
-            <div class="stat-value">{{ $stats['ventes_credit'] }}</div>
-        </div>
-        <div class="stat-item">
-            <div class="stat-label">Ventes Cash</div>
-            <div class="stat-value">{{ $stats['ventes_cash'] }}</div>
-        </div>
     </div>
 
     <p
-        style="text-align: center; font-size: 6pt; color: #cbd5e1; text-transform: uppercase; letter-spacing: 0.3em; margin-top: 20mm;">
-        RAPPORT GÉNÉRÉ AUTOMATIQUEMENT - {{ \Carbon\Carbon::now()->format('d/m/Y à H:i') }}
+        style="text-align: center; font-size: 6pt; color: #666; text-transform: uppercase; letter-spacing: 0.3em; margin-top: 15px;">
+        RAPPORT GÉNÉRÉ AUTOMATIQUEMENT LE {{ date('d/m/Y à H:i') }}
     </p>
 @endsection

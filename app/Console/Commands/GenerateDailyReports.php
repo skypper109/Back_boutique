@@ -22,14 +22,14 @@ class GenerateDailyReports extends Command
 
         $this->info("Génération des rapports journaliers pour le {$date}...");
 
-        $boutiques = Boutique::where('status', 'active')->get();
+        $boutiques = Boutique::where('is_active', 1)->get();
 
         if ($boutiques->isEmpty()) {
             $this->warn('Aucune boutique active trouvée.');
             return 0;
         }
 
-        $controller = new DailyReportController();
+        $controller = app(DailyReportController::class);
         $successCount = 0;
         $errorCount = 0;
 
@@ -53,6 +53,10 @@ class GenerateDailyReports extends Command
                     Mail::to($admin->email)->send(new DailyReportMail($report));
                     $this->info("  ✓ Email envoyé à {$admin->email}");
                 }
+
+                // Send via WhatsApp
+                $controller->sendWhatsApp($report->id);
+                $this->info("  ✓ Notification WhatsApp envoyée");
 
                 $report->sent_at = now();
                 $report->save();

@@ -13,13 +13,20 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use App\Mail\DailyReportMail;
 use Illuminate\Support\Facades\Mail;
+use App\Services\WhatsAppService;
 
 class DailyReportController extends Controller
 {
+    protected $whatsApp;
+
+    public function __construct(WhatsAppService $whatsApp)
+    {
+        $this->whatsApp = $whatsApp;
+    }
     public function index(Request $request)
     {
         $user = Auth::user();
-        $boutiqueId = $user->role === 'admin' ? $request->input('boutique_id') : $user->boutique_id;
+        $boutiqueId = ($user && $user->role === 'admin') ? $request->input('boutique_id') : ($user ? $user->boutique_id : null);
 
         $query = DailyReport::with('boutique')
             ->when($boutiqueId, fn($q) => $q->where('boutique_id', $boutiqueId))
@@ -38,22 +45,26 @@ class DailyReportController extends Controller
     {
         $request->validate([
             'date' => 'required|date',
-            'boutique_id' => 'nullable|exists:boutiques,id'
+            'boutique_id' => 'nullable|exists:boutiques,id',
+            'regenerate' => 'nullable|boolean'
         ]);
 
         $user = Auth::user();
-        $boutiqueId = $user->role === 'admin' 
+        $boutiqueId = ($user && $user->role === 'admin') 
             ? ($request->boutique_id ?? Boutique::first()->id)
-            : $user->boutique_id;
+            : ($user ? $user->boutique_id : ($request->boutique_id ?? Boutique::first()->id));
 
         $date = Carbon::parse($request->date)->format('Y-m-d');
 
         try {
+            // Check if exists for regeneration message
+            $exists = DailyReport::where('boutique_id', $boutiqueId)->whereDate('date', $date)->exists();
+            
             $report = $this->generateReport($boutiqueId, $date);
 
             return response()->json([
                 'success' => true,
-                'message' => 'Rapport généré avec succès',
+                'message' => $exists ? 'Rapport mis à jour avec succès' : 'Rapport généré avec succès',
                 'report' => $report
             ]);
         } catch (\Exception $e) {
@@ -70,7 +81,7 @@ class DailyReportController extends Controller
         $user = Auth::user();
         $report = DailyReport::with('boutique')->findOrFail($id);
 
-        if ($user->role !== 'admin' && $report->boutique_id !== $user->boutique_id) {
+        if ($user && $user->role !== 'admin' && $report->boutique_id !== $user->boutique_id) {
             return response()->json(['error' => 'Non autorisé'], 403);
         }
 
@@ -82,7 +93,7 @@ class DailyReportController extends Controller
         $user = Auth::user();
         $report = DailyReport::with('boutique')->findOrFail($id);
 
-        if ($user->role !== 'admin' && $report->boutique_id !== $user->boutique_id) {
+        if ($user && $user->role !== 'admin' && $report->boutique_id !== $user->boutique_id) {
             return response()->json(['error' => 'Non autorisé'], 403);
         }
 
@@ -108,7 +119,7 @@ class DailyReportController extends Controller
         $user = Auth::user();
         $report = DailyReport::with('boutique')->findOrFail($id);
 
-        if ($user->role !== 'admin' && $report->boutique_id !== $user->boutique_id) {
+        if ($user && $user->role !== 'admin' && $report->boutique_id !== $user->boutique_id) {
             return response()->json(['error' => 'Non autorisé'], 403);
         }
 
@@ -123,6 +134,31 @@ class DailyReportController extends Controller
             return response()->json([
                 'success' => false,
                 'error' => 'Erreur lors de l\'envoi de l\'email',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function sendWhatsApp($id)
+    {
+        $user = Auth::user();
+        $report = DailyReport::with('boutique')->findOrFail($id);
+
+        if ($user && $user->role !== 'admin' && $report->boutique_id !== $user->boutique_id) {
+            return response()->json(['error' => 'Non autorisé'], 403);
+        }
+
+        try {
+            $this->sendReportWhatsApp($report);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Rapport envoyé via WhatsApp avec succès'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Erreur lors de l\'envoi WhatsApp',
                 'message' => $e->getMessage()
             ], 500);
         }
@@ -226,5 +262,32 @@ class DailyReportController extends Controller
 
         $report->sent_at = now();
         $report->save();
+    }
+
+    private function sendReportWhatsApp(DailyReport $report)
+    {
+        $admins = \App\Models\User::where('role', 'admin')
+            ->where('boutique_id', $report->boutique_id)
+            ->get();
+
+        $boutiqueName = $report->boutique->nom;
+        $date = $report->date->format('d/m/Y');
+        $ventes = number_format($report->total_ventes, 0, '.', ' ');
+        $benefice = number_format($report->benefice_net, 0, '.', ' ');
+
+        $message = "📊 *Rapport Journalier - {$boutiqueName}*\n";
+        $message .= "📅 Date: {$date}\n\n";
+        $message .= "💰 Ventes Net: {$ventes} CFA\n";
+        $message .= "📉 Dépenses: " . number_format($report->total_depenses, 0, '.', ' ') . " CFA\n";
+        $message .= "✨ Bénéfice Net: *{$benefice} CFA*\n\n";
+        $message .= "📝 Lien du rapport: " . url("/api/reports/{$report->id}/download");
+
+        foreach ($admins as $admin) {
+            // Use phone if available, or boutique phone as fallback for admin
+            $phone = $admin->telephone ?? $report->boutique->telephone;
+            if ($phone) {
+                $this->whatsApp->sendMessage($phone, $message);
+            }
+        }
     }
 }

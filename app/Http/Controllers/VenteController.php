@@ -82,6 +82,7 @@ class VenteController extends Controller
         }
 
         $nouveauMontantTotal = 0;
+        $nouvelleRemise = $request->input('remise', $vente->remise);
 
         foreach ($request->produits as $produitData) {
             $produitId = $produitData['produit']['id'];
@@ -110,10 +111,14 @@ class VenteController extends Controller
                     'produit_id' => $produitId,
                     'boutique_id' => $boutique_id,
                     'user_id' => $user->id,
+                    'vente_id' => $vente->id,
                     'quantite' => abs($difference),
                     'type' => $difference > 0 ? 'ajout' : 'retrait',
+                    'prix_achat' => $stock ? $stock->prix_achat : 0,
+                    'prix_vente' => $detailVente->prix_unitaire,
+                    'remise' => $difference > 0 ? 0 : ($nouvelleRemise / count($request->produits)), // Approximative prorata if global
                     'description' => ($difference > 0 ? 'Retour Client (Partiel)' : 'Ajustement Quantité') . ' sur Vente #' . $venteId,
-                    'date' => now()->format('Y-m-d')
+                    'date' => now()
                 ]);
 
                 if ($nouvelleQte <= 0) {
@@ -131,6 +136,9 @@ class VenteController extends Controller
             }
         }
 
+        // Apply global remise to the new total
+        $montantFinalApresRemise = $nouveauMontantTotal - $nouvelleRemise;
+
         if ($nouveauMontantTotal <= 0) {
             if ($vente->type_paiement == 'credit') {
                 // If payments were already made, refund them
@@ -140,11 +148,11 @@ class VenteController extends Controller
                 $montant_total_paye = $credits->sum('montant');
                 if ($montant_total_paye > 0) {
                     Expense::create([
-                        'type' => "",
+                        'type' => "Remboursement Retour",
                         'boutique_id' => $boutique_id,
                         'user_id' => $user->id,
                         'montant' => $montant_total_paye,
-                        'date' => now()->format('Y-m-d'),
+                        'date' => now(),
                         'description' => "Remboursement suite au retour complet de la vente #" . $venteId,
                     ]);
                 }
@@ -154,15 +162,18 @@ class VenteController extends Controller
             } else {
                 $vente->statut = 'annulee';
             }
+            $vente->remise = 0;
             $vente->save();
 
             return response()->json(['message' => 'Vente annulée car tous les produits ont été retournés'], 200);
         }
 
         if ($vente->type_paiement == 'credit') {
-            $ancienMontantTotal = $vente->montant_total;
-            $vente->montant_total = $nouveauMontantTotal;
-            $valeurRetour = $ancienMontantTotal - $nouveauMontantTotal;
+            $ancienMontantTotalVente = $vente->montant_total; // This was total - original_remise
+            $vente->montant_total = $montantFinalApresRemise;
+            $vente->remise = $nouvelleRemise;
+            
+            $valeurRetour = $ancienMontantTotalVente - $montantFinalApresRemise;
             $ancienRestant = $vente->montant_restant;
 
             if ($valeurRetour > $ancienRestant) {
@@ -174,27 +185,26 @@ class VenteController extends Controller
                     'boutique_id' => $boutique_id,
                     'user_id' => $user->id,
                     'montant' => $surplusARembourser,
-                    'date' => now()->format('Y-m-d'),
-                    'description' => "Remboursement de surplus (Rendu au client) suite au retour produit sur la vente à crédit #" . $venteId . ". Retour: " . number_format($valeurRetour, 0, '.', ' ') . " FCFA, Dette soldée: " . number_format($ancienRestant, 0, '.', ' ') . " FCFA.",
+                    'date' => now(),
+                    'description' => "Remboursement de surplus (Rendu au client) suite au retour produit sur la vente à crédit #" . $venteId . ". Retour net: " . number_format($valeurRetour, 0, '.', ' ') . " FCFA, Dette soldée: " . number_format($ancienRestant, 0, '.', ' ') . " FCFA.",
                 ]);
 
                 $vente->montant_restant = 0;
                 $vente->statut = 'payee';
-                // $vente->montant_statut = 'Credit paye';
             } else {
                 // On réduit simplement la dette
                 $vente->montant_restant = $ancienRestant - $valeurRetour;
                 if ($vente->montant_restant == 0) {
                     $vente->statut = 'payee';
-                    // $vente->montant_statut = 'Credit paye';
                 }
             }
         } else {
-            $vente->montant_total = $nouveauMontantTotal;
+            $vente->montant_total = $montantFinalApresRemise;
+            $vente->remise = $nouvelleRemise;
         }
         $vente->save();
 
-        return response()->json(['message' => 'Vente modifiée avec succès', 'nouveau_montant' => $nouveauMontantTotal], 200);
+        return response()->json(['message' => 'Vente modifiée avec succès', 'nouveau_montant' => $montantFinalApresRemise], 200);
     }
 
     public function supprimerVente($id)
@@ -221,10 +231,14 @@ class VenteController extends Controller
                 'produit_id' => $detail->produit_id,
                 'boutique_id' => $boutique_id,
                 'user_id' => Auth::id(),
+                'vente_id' => $vente->id,
                 'quantite' => $detail->quantite,
                 'type' => 'ajout',
+                'prix_achat' => $stock ? $stock->prix_achat : 0,
+                'prix_vente' => $detail->prix_unitaire,
+                'remise' => 0, // Reset remise on total cancellation
                 'description' => 'Annulation de Vente #' . $vente->id,
-                'date' => now()->format('Y-m-d')
+                'date' => now()
             ]);
         }
 
@@ -268,10 +282,14 @@ class VenteController extends Controller
             'produit_id' => $idProduit,
             'boutique_id' => $boutique_id,
             'user_id' => $user->id,
+            'vente_id' => $vente->id,
             'quantite' => $qte,
             'type' => 'ajout',
+            'prix_achat' => $stock ? $stock->prix_achat : 0,
+            'prix_vente' => $detailVente->prix_unitaire,
+            'remise' => 0,
             'description' => 'Annulation de Vente du ' . ($produit ? $produit->nom : 'Produit inconnu'),
-            'date' => now()->format('Y-m-d')
+            'date' => now()
         ]);
 
         $detailVente->delete();
@@ -320,7 +338,9 @@ class VenteController extends Controller
     public function chiffre()
     {
         $boutique_id = $this->getBoutiqueId();
+        $currentYear = now()->year;
 
+        // 1. Annual Summary (Simple CA from Ventes table for the list)
         $parAnnee = Vente::where('boutique_id', $boutique_id)
             ->whereIn('statut', ['validee', 'payee', 'credit'])
             ->selectRaw("YEAR(date_vente) as annee, SUM(montant_total) as ca")
@@ -328,24 +348,73 @@ class VenteController extends Controller
             ->orderByRaw("YEAR(date_vente) DESC")
             ->get();
 
-        $currentYear = now()->year;
-        $parMois = DB::table('ventes')
-            ->join('detail_ventes', 'ventes.id', '=', 'detail_ventes.vente_id')
-            ->where('ventes.boutique_id', $boutique_id)
-            ->whereIn('ventes.statut', ['validee', 'payee', 'credit'])
-            ->whereRaw("YEAR(ventes.date_vente) = ?", [$currentYear])
-            ->select(
-                DB::raw("MONTH(ventes.date_vente) as mois_num"),
-                DB::raw('SUM(detail_ventes.montant_total) as ca'),
-                DB::raw('SUM(detail_ventes.quantite) as qtv')
-            )
-            ->groupBy(DB::raw("MONTH(ventes.date_vente)"))
-            ->orderBy(DB::raw("MONTH(ventes.date_vente)"), 'DESC')
+        // 2. Monthly Detail (More precise, including returns and costs)
+        // We calculate this from Inventaire to be consistent with the audit page
+        $mouvements = Inventaire::with('produit.stock')
+            ->where('boutique_id', $boutique_id)
+            ->whereYear('date', $currentYear)
+            ->whereNotNull('vente_id')
             ->get();
+
+        $statsMensuelles = [];
+        // Initialize 12 months
+        for ($i = 1; $i <= 12; $i++) {
+            $statsMensuelles[$i] = [
+                'mois_num' => $i,
+                'ca' => 0,
+                'qtv' => 0,
+                'cout_achat' => 0,
+                'remises_traitees' => [] // To track global remise per vente_id
+            ];
+        }
+
+        foreach ($mouvements as $mov) {
+            $m = \Carbon\Carbon::parse($mov->date)->month;
+
+            $pxA = $mov->prix_achat ?? ($mov->produit->stock->prix_achat ?? 0);
+            $pxV = $mov->prix_vente ?? ($mov->produit->stock->prix_vente ?? 0);
+            
+            if ($mov->type === 'retrait') {
+                $statsMensuelles[$m]['ca'] += ($mov->quantite * $pxV);
+                $statsMensuelles[$m]['qtv'] += $mov->quantite;
+                $statsMensuelles[$m]['cout_achat'] += ($mov->quantite * $pxA);
+                
+                // Handle global remise (only once per vente_id)
+                if (!in_array($mov->vente_id, $statsMensuelles[$m]['remises_traitees'])) {
+                    $statsMensuelles[$m]['ca'] -= (float)($mov->remise ?? 0);
+                    $statsMensuelles[$m]['remises_traitees'][] = $mov->vente_id;
+                }
+            } else {
+                // It's a return (ajout linked to vente_id)
+                $statsMensuelles[$m]['ca'] -= ($mov->quantite * $pxV);
+                $statsMensuelles[$m]['qtv'] -= $mov->quantite;
+                $statsMensuelles[$m]['cout_achat'] -= ($mov->quantite * $pxA);
+            }
+        }
+
+        // Convert to numerical array and sort desc by month
+        $parMois = array_values($statsMensuelles);
+        usort($parMois, function($a, $b) {
+            return $b['mois_num'] - $a['mois_num'];
+        });
+
+        // 3. Global Stats for the current year
+        $globalStats = [
+            'total_ca' => 0,
+            'total_qtv' => 0,
+            'total_benefice' => 0
+        ];
+
+        foreach ($parMois as $m) {
+            $globalStats['total_ca'] += $m['ca'];
+            $globalStats['total_qtv'] += $m['qtv'];
+            $globalStats['total_benefice'] += ($m['ca'] - $m['cout_achat']);
+        }
 
         return response()->json([
             'par_annee' => $parAnnee,
             'par_mois' => $parMois,
+            'annual_stats' => $globalStats,
             'annee_actuelle' => $currentYear
         ], 200);
     }
@@ -377,21 +446,68 @@ class VenteController extends Controller
     public function getVenteByAnnee($annee)
     {
         $boutique_id = $this->getBoutiqueId();
-        $vente = DB::table('ventes')
-            ->join('detail_ventes', 'ventes.id', '=', 'detail_ventes.vente_id')
-            ->where('ventes.boutique_id', $boutique_id)
-            ->whereIn('ventes.statut', ['validee', 'payee', 'credit'])
-            ->whereRaw("YEAR(ventes.date_vente) = ?", [$annee])
-            ->select(
-                DB::raw("MONTH(ventes.date_vente) as mois_num"),
-                DB::raw('SUM(detail_ventes.montant_total) as ca'),
-                DB::raw('SUM(detail_ventes.quantite) as qtv')
-            )
-            ->groupBy(DB::raw("MONTH(ventes.date_vente)"))
-            ->orderBy(DB::raw("MONTH(ventes.date_vente)"), 'DESC')
+
+        // Use Inventaire to calculate net stats for the specific year
+        $mouvements = Inventaire::with('produit.stock')
+            ->where('boutique_id', $boutique_id)
+            ->whereYear('date', $annee)
+            ->whereNotNull('vente_id')
             ->get();
 
-        return response()->json($vente, 200);
+        $statsMensuelles = [];
+        for ($i = 1; $i <= 12; $i++) {
+            $statsMensuelles[$i] = [
+                'mois_num' => $i,
+                'ca' => 0,
+                'qtv' => 0,
+                'cout_achat' => 0,
+                'remises_traitees' => []
+            ];
+        }
+
+        foreach ($mouvements as $mov) {
+            $m = (int)Carbon::parse($mov->date)->month;
+            $pxA = $mov->prix_achat ?? ($mov->produit->stock->prix_achat ?? 0);
+            $pxV = $mov->prix_vente ?? ($mov->produit->stock->prix_vente ?? 0);
+            
+            if ($mov->type === 'retrait') {
+                $statsMensuelles[$m]['ca'] += ($mov->quantite * $pxV);
+                $statsMensuelles[$m]['qtv'] += $mov->quantite;
+                $statsMensuelles[$m]['cout_achat'] += ($mov->quantite * $pxA);
+                
+                if (!in_array($mov->vente_id, $statsMensuelles[$m]['remises_traitees'])) {
+                    $statsMensuelles[$m]['ca'] -= (float)($mov->remise ?? 0);
+                    $statsMensuelles[$m]['remises_traitees'][] = $mov->vente_id;
+                }
+            } else {
+                $statsMensuelles[$m]['ca'] -= ($mov->quantite * $pxV);
+                $statsMensuelles[$m]['qtv'] -= $mov->quantite;
+                $statsMensuelles[$m]['cout_achat'] -= ($mov->quantite * $pxA);
+            }
+        }
+
+        $venteList = array_values($statsMensuelles);
+        usort($venteList, function($a, $b) {
+            return $b['mois_num'] - $a['mois_num'];
+        });
+
+        // Calculate global stats for this year
+        $annualStats = [
+            'total_ca' => 0,
+            'total_qtv' => 0,
+            'total_benefice' => 0
+        ];
+
+        foreach ($venteList as $m) {
+            $annualStats['total_ca'] += $m['ca'];
+            $annualStats['total_qtv'] += $m['qtv'];
+            $annualStats['total_benefice'] += ($m['ca'] - $m['cout_achat']);
+        }
+
+        return response()->json([
+            'par_mois' => $venteList,
+            'annual_stats' => $annualStats
+        ], 200);
     }
 
     public function getVenteByMois($annee, $mois)
@@ -557,7 +673,8 @@ class VenteController extends Controller
                 $vente->statut = 'proforma';
                 $vente->montant_restant = $request->montant_total;
             } else {
-                $vente->statut = ($vente->type_paiement === 'credit') ? 'credit' : 'payee';
+                $vente->remise = $request->remise ?? 0;
+            $vente->statut = ($vente->type_paiement === 'credit') ? 'credit' : 'payee';
                 $vente->montant_restant = ($vente->type_paiement === 'credit')
                     ? ($request->montant_total - $vente->montant_avance)
                     : 0;
@@ -600,7 +717,7 @@ class VenteController extends Controller
                 $detail->montant = $prixU * $item['quantite'];
                 $detail->remise = $request->remise ?? 0;
                 $detail->montant_total = $item['montant_total'] ?? $detail->montant;
-                $detail->montant_paye = $detail->montant_total;
+                $detail->montant_paye = $detail->montant_total - $request->remise;
                 $detail->quantite_restante = $item['quantite'];
                 $detail->save();
 
@@ -609,10 +726,14 @@ class VenteController extends Controller
                         'produit_id' => $pId,
                         'boutique_id' => $boutique_id,
                         'user_id' => $user->id,
+                        'vente_id' => $vente->id,
                         'quantite' => $item['quantite'],
                         'type' => 'retrait',
+                        'prix_achat' => $stock ? $stock->prix_achat : 0,
+                        'prix_vente' => $prixU,
+                        'remise' => $request->remise ?? 0,
                         'description' =>$vente->statut == 'credit' ? "Produit ".$pNom . " vendu a credit " : "Vente du produit # ".(isset($item['produits']['reference']) ? $item['produits']['reference'] : ($item['reference'] ?? "Produit #$pId")),
-                        'date' => now()->format('Y-m-d')
+                        'date' => $request->input('date') ?? now()->format('Y-m-d')
                     ]);
                 }
             }
@@ -622,7 +743,7 @@ class VenteController extends Controller
                     'client_id' => $client_id,
                     'boutique_id' => $boutique_id,
                     'montant_total' => $request->montant_total,
-                    'date_facturation' => now()->format('Y-m-d'),
+                    'date_facturation' => $request->input('date') ?? now()->format('Y-m-d'),
                     'statut' => ($vente->type_paiement === 'credit' ? 'en attente' : 'payée'),
                     'description' => 'Facture Vente #' . $vente->id
                 ]);
@@ -678,8 +799,12 @@ class VenteController extends Controller
                     'produit_id' => $detail->produit_id,
                     'boutique_id' => $boutique_id,
                     'user_id' => $user->id,
+                    'vente_id' => $vente->id,
                     'quantite' => $detail->quantite,
                     'type' => 'retrait',
+                    'prix_achat' => $stock ? $stock->prix_achat : 0,
+                    'prix_vente' => $detail->prix_unitaire,
+                    'remise' => $detail->remise ?? 0,
                     'description' => 'Conversion Pro-forma #' . $vente->id . ' vers Vente',
                     'date' => now()->format('Y-m-d')
                 ]);
@@ -687,6 +812,7 @@ class VenteController extends Controller
 
             // 2. Update Vente Identity
             $vente->type_paiement = $type_paiement;
+            $vente->remise = $vente->detailVentes->sum('remise');
             $vente->montant_avance = $montant_avance;
             $vente->statut = ($type_paiement === 'credit') ? 'credit' : 'payee';
             $vente->montant_restant = ($type_paiement === 'credit')

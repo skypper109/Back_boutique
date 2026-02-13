@@ -108,11 +108,8 @@ class PdfController extends Controller
                     ->find($id);
 
                 if ($facture && $facture->factureVentes->isNotEmpty()) {
-                    // Use the first vente for basic template info, but we should ideally use the facture data
                     $vente = $facture->factureVentes->first()->vente;
-                    // Ensure the vente object has the correct total and client from facture if they differ
                     $vente->montant_total = $facture->montant_total;
-                    // Collect all details from all sales in the facture for the total view
                     $allDetails = collect();
                     foreach($facture->factureVentes as $fv) {
                         if($fv->vente) {

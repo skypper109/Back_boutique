@@ -122,6 +122,41 @@
         </tr>
     </table>
 
+
+    <div
+        style="margin-top: 25px; font-weight: bold; text-decoration: underline; font-size: 9pt; text-transform: uppercase;">
+        La liste des Produits Achetés :
+    </div>
+    <table class="excel-table zebra">
+        <thead>
+            <tr>
+                <th style="width: 10%;">REF</th>
+                <th style="width: 50%;">DÉSIGNATION ARTICLE</th>
+                <th style="width: 10%;" class="text-center">QTÉ</th>
+                <th style="width: 15%;" class="text-right">P.U.</th>
+                <th style="width: 15%;" class="text-right">TOTAL</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach ($vente->detailVentes as $detail)
+                <tr>
+                    <td class="text-center">
+                        {{ str_pad($detail->produit->id, 4, '0', STR_PAD_LEFT) }}</td>
+                    <td>{{ $detail->produit->nom . ' (' . ($detail->produit->reference ?? ' ') . ') ' }}</td>
+                    <td class="text-center font-bold">{{ $detail->quantite }}</td>
+                    <td class="text-right">{{ number_format($detail->prix_unitaire, 0, ',', ' ') }}</td>
+                    <td class="text-right font-bold">{{ number_format($detail->montant_total, 0, ',', ' ') }}</td>
+                </tr>
+            @endforeach
+            @if ($vente->montant_avance > 0)
+                <tr>
+                    <td class="text-left font-bold" colspan="4">AVANCE PAYER</td>
+                    <td class="text-right font-bold">{{ number_format($vente->montant_avance, 0, ',', ' ') }}</td>
+                </tr>
+            @endif
+        </tbody>
+    </table>
+
     <div
         style="margin-top: 25px; font-weight: bold; text-decoration: underline; font-size: 9pt; text-transform: uppercase;">
         Historique des Versements Effectués :
@@ -139,7 +174,9 @@
             @if ($paiements && count($paiements) > 0)
                 @foreach ($paiements as $paiement)
                     <tr>
-                        <td class="text-center">{{ \Carbon\Carbon::parse($paiement->date_paiement)->format('d/m/Y') }}</td>
+                        <td class="text-center">
+                            {{ \Carbon\Carbon::parse($paiement->date_paiement)->format('d/m/Y HH:mm') }}
+                        </td>
                         <td class="text-center font-bold">{{ strtoupper($paiement->mode_paiement) }}</td>
                         <td class="text-right font-bold">{{ number_format($paiement->montant, 0, ',', ' ') }}
                             {{ $boutique->devise }}</td>
@@ -153,7 +190,7 @@
         </tbody>
     </table>
 
-    <div style="margin-top: 30px; width: 350px; float: right;">
+    <div style="margin-top: 5px; width: 360px; float: right;">
         <table class="excel-table" style="border: 2px solid #000;">
             <tr>
                 <td style="background-color: #eee; font-weight: bold;">MONTANT TOTAL DE L'ACHAT</td>
@@ -174,15 +211,14 @@
         </table>
     </div>
 
-    <div style="clear: both; margin-top: 100px;">
+    <div style="clear: both; margin-bottom: 0px;">
         <table style="width: 100%; border: none;">
             <tr>
-                <td
-                    style="width: 45%; border: 1px solid #aaa; padding: 15px; text-align: center; vertical-align: top; height: 100px;">
+                <td style="width: 45%; text-align: center; vertical-align: top; height: 20px;">
                     <div style="font-size: 8pt; font-weight: bold; text-transform: uppercase;">Cachet Boutique & Date</div>
                 </td>
                 <td style="width: 10%; border: none;"></td>
-                <td style="width: 45%; border: 1px solid #aaa; padding: 15px; text-align: center; vertical-align: top;">
+                <td style="width: 45%; text-align: center; vertical-align: top;">
                     <div style="font-size: 8pt; font-weight: bold; text-transform: uppercase;">Signature Client</div>
                 </td>
             </tr>
@@ -190,7 +226,7 @@
     </div>
 
     <div
-        style="margin-top: 40px; text-align: center; font-size: 8pt; color: #666; font-style: italic; border-top: 1px solid #ccc; padding-top: 10px;">
+        style="margin-top: 0px; text-align: center; font-size: 8pt; color: #666; font-style: italic; border-top: 1px solid #ccc; padding-top: 10px;">
         {{ $boutique->footer_recu ?? 'Conservez ce reçu comme preuve de paiement de votre créance.' }}
     </div>
 @endsection

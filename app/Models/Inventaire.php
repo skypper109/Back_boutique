@@ -26,4 +26,9 @@ class Inventaire extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    public function vente()
+    {
+        return $this->belongsTo(Vente::class);
+    }
 }

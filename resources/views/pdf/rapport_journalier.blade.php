@@ -131,29 +131,101 @@
             </tr>
         </thead>
         <tbody>
-            @foreach ($ventes as $vente)
-                <tr>
-                    <td class="text-center">{{ $vente->id }}</td>
-                    <td>{{ $vente->client->nom ?? 'CLIENT PASSAGE' }}</td>
-                    <td class="text-center font-bold" style="font-size: 7pt;">
-                        {{ $vente->type_paiement === 'credit' ? 'CRÉDIT' : 'CASH' }}
-                    </td>
-                    <td>
-                        @foreach ($vente->detailVentes as $detail)
-                            • {{ $detail->produit->nom }} (x{{ $detail->quantite }})<br>
-                        @endforeach
-                    </td>
-                    <td class="text-center font-bold">{{ $vente->detailVentes->sum('quantite') }}</td>
-                    <td class="text-right">{{ number_format($vente->montant_total, 0, ',', ' ') }}</td>
-                    <td class="text-right text-red">{{ number_format($vente->montant_remis ?? 0, 0, ',', ' ') }}</td>
-                    <td class="text-right font-bold bg-grey">
-                        {{ number_format($vente->montant_total - ($vente->montant_remis ?? 0), 0, ',', ' ') }}</td>
+            @if ($stats['ventes_cash'] > 0)
+                <tr class="bg-grey">
+                    <td class="text-center font-bold" colspan="8">Ventes Effectuées</td>
                 </tr>
-            @endforeach
+                @foreach ($ventes as $vente)
+                    <tr>
+                        <td class="text-center">{{ $vente->id }}</td>
+                        <td>{{ $vente->client->nom == 'ANONYME' ? 'CLIENT PASSAGE' : $vente->client->nom }}</td>
+                        <td class="text-center font-bold" style="font-size: 7pt;">
+                            {{ $vente->type_paiement === 'credit' ? 'CRÉDIT' : 'CASH' }}
+                        </td>
+                        <td>
+                            @foreach ($vente->detailVentes as $detail)
+                                • {{ $detail->produit->nom . ' ' . ($detail->produit->reference ?? '') }}
+                                (x{{ $detail->quantite }})
+                                <br>
+                            @endforeach
+                        </td>
+                        <td class="text-center font-bold">{{ $vente->detailVentes->sum('quantite') }}</td>
+                        <td class="text-right">
+                            {{ number_format($vente->montant_total + ($vente->remise ?? 0), 0, ',', ' ') }}</td>
+                        <td class="text-right text-red">{{ number_format($vente->remise ?? 0, 0, ',', ' ') }}</td>
+                        <td class="text-right font-bold bg-grey">
+                            {{ number_format($vente->montant_total, 0, ',', ' ') }}</td>
+                    </tr>
+                @endforeach
+
+                <tr class="bg-grey">
+                    <td colspan="5" class="text-right font-bold">TOTAL</td>
+                    <td class="text-right font-bold" style="font-size: 10pt;">
+                        {{ number_format($totaux['ventes_brut'], 0, ',', ' ') }}</td>
+                    <td class="text-right font-bold">{{ number_format($totaux['remises'] ?? 0, 0, ',', ' ') }}</td>
+                    <td class="text-right font-bold" style="font-size: 10pt;">
+                        {{ number_format($totaux['ventes_brut'] - $totaux['remises'], 0, ',', ' ') }}</td>
+                </tr>
+            @endif
+
+            @if ($stats['ventes_credit'] > 0)
+                <tr class="bg-grey">
+                    <td class="text-center font-bold" colspan="8">Ventes Effectuées a credit</td>
+                </tr>
+                @foreach ($ventes_credit as $vente)
+                    <tr>
+                        <td class="text-center">{{ $vente->id }}</td>
+                        <td>{{ $vente->client->nom == 'ANONYME' ? 'CLIENT PASSAGE' : $vente->client->nom }}</td>
+                        <td class="text-center font-bold" style="font-size: 7pt;">
+                            {{ $vente->type_paiement === 'credit' ? 'CRÉDIT' : 'CASH' }}
+                        </td>
+                        <td>
+                            @foreach ($vente->detailVentes as $detail)
+                                • {{ $detail->produit->nom . ' ' . ($detail->produit->reference ?? '') }}
+                                (x{{ $detail->quantite }})
+                                <br>
+                            @endforeach
+                        </td>
+                        <td class="text-center font-bold">{{ $vente->detailVentes->sum('quantite') }}</td>
+                        <td class="text-right">{{ number_format($vente->montant_total, 0, ',', ' ') }}</td>
+                        <td class="text-right text-red">{{ number_format($vente->remise ?? 0, 0, ',', ' ') }}</td>
+                        <td class="text-right font-bold bg-grey">
+                            {{ number_format($vente->montant_total - ($vente->montant_remis ?? 0), 0, ',', ' ') }}</td>
+                    </tr>
+                @endforeach
+            @endif
+
+            @if ($stats['ventes_annulee'] > 0)
+                <tr class="bg-grey">
+                    <td class="text-center font-bold" colspan="8"> Ventes Retournée/Annulée </td>
+                </tr>
+                @foreach ($ventes_annulee as $vente)
+                    <tr>
+                        <td class="text-center">{{ $vente->id }}</td>
+                        <td>{{ $vente->client->nom == 'ANONYME' ? 'CLIENT PASSAGE' : $vente->client->nom }}</td>
+                        <td class="text-center font-bold" style="font-size: 7pt;">
+                            {{ $vente->type_paiement === 'credit' ? 'CRÉDIT' : 'CASH' }}
+                        </td>
+                        <td style="color: rgba(204, 0, 0, 0.703)">
+                            @foreach ($vente->detailVentes as $detail)
+                                • {{ $detail->produit->nom . ' ' . ($detail->produit->reference ?? '') }}
+                                (x{{ $detail->quantite }})
+                                <br>
+                            @endforeach
+                        </td>
+                        <td class="text-center font-bold">{{ $vente->detailVentes->sum('quantite') }}</td>
+                        <td class="text-right">{{ number_format($vente->montant_total, 0, ',', ' ') }}</td>
+                        <td class="text-right text-red">{{ number_format($vente->montant_remis ?? 0, 0, ',', ' ') }}</td>
+                        <td class="text-right font-bold bg-grey">
+                            {{ number_format($vente->montant_total - ($vente->montant_remis ?? 0), 0, ',', ' ') }}</td>
+                    </tr>
+                @endforeach
+            @endif
+
         </tbody>
         <tfoot>
             <tr class="bg-grey">
-                <td colspan="7" class="text-right font-bold">TOTAL VENTES NETTES (A)</td>
+                <td colspan="7" class="text-right font-bold">TOTAL VENTES NETTES(A credit + normale) (A)</td>
                 <td class="text-right font-bold" style="font-size: 10pt;">
                     {{ number_format($totaux['ventes_net'], 0, ',', ' ') }}</td>
             </tr>
@@ -175,10 +247,10 @@
                 @foreach ($depenses as $depense)
                     <tr>
                         <td class="text-center">{{ \Carbon\Carbon::parse($depense->created_at)->format('H:i') }}</td>
-                        <td class="font-bold">{{ $depense->category->name ?? 'DIVERS' }}</td>
+                        <td class="font-bold">{{ $depense->type ?? 'DIVERS' }}</td>
                         <td>{{ $depense->description }}</td>
                         <td class="text-right font-bold red" style="color: #c00;">
-                            {{ number_format($depense->amount, 0, ',', ' ') }}</td>
+                            {{ number_format($depense->montant, 0, ',', ' ') }}</td>
                     </tr>
                 @endforeach
             @else
@@ -223,11 +295,19 @@
             <th colspan="2">STATISTIQUES OPÉRATIONNELLES</th>
         </tr>
         <tr>
+            <td style="width: 50%;">Nombre de Vente Effectuée :</td>
+            <td class="text-center font-bold">{{ $stats['ventes_cash'] + $stats['ventes_credit'] }}</td>
+        </tr>
+        <tr>
+            <td>Nombre de Vente Annulée :</td>
+            <td class="text-center font-bold">{{ $stats['ventes_annulee'] }}</td>
+        </tr>
+        <tr>
             <td style="width: 50%;">Nombre de factures éditées :</td>
             <td class="text-center font-bold">{{ $stats['nombre_ventes'] }}</td>
         </tr>
         <tr>
-            <td>Nombre de bons de dépense :</td>
+            <td>Nombre de dépense :</td>
             <td class="text-center font-bold">{{ $stats['nombre_depenses'] }}</td>
         </tr>
     </table>

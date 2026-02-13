@@ -102,7 +102,7 @@
                     <div class="doc-type">FACTURE</div>
                     <div style="margin-top: 10px; text-align: right; font-weight: bold;">
                         N° #{{ str_pad($vente->id, 6, '0', STR_PAD_LEFT) }}<br>
-                        Date: {{ \Carbon\Carbon::parse($vente->date_vente)->format('d/m/Y') }}
+                        Date: {{ \Carbon\Carbon::parse($vente->date_vente)->format('d/m/Y HH:mm') }}
                     </div>
                 </td>
             </tr>
@@ -112,7 +112,7 @@
     <table class="excel-table">
         <tr>
             <td style="background-color: #f2f2f2; font-weight: bold; width: 15%;">CLIENT</td>
-            <td>{{ $vente->client->nom ?? 'CLIENT DE PASSAGE' }}</td>
+            <td>{{ $vente->client->nom != 'ANONYME' ? $vente->client->nom : 'CLIENT DE PASSAGE' }}</td>
             <td style="background-color: #f2f2f2; font-weight: bold; width: 15%;">STATUS</td>
             <td class="text-center font-bold"
                 style="{{ $vente->type_paiement === 'credit' ? 'color: red;' : 'color: green;' }}">
@@ -134,37 +134,49 @@
         <tbody>
             @foreach ($vente->detailVentes as $detail)
                 <tr>
-                    <td class="text-center">{{ str_pad($detail->produit->id, 4, '0', STR_PAD_LEFT) }}</td>
+                    <td class="text-center">
+                        {{ str_pad($detail->produit->reference ?? $detail->produit->id, 4, '0', STR_PAD_LEFT) }}</td>
                     <td>{{ $detail->produit->nom }}</td>
                     <td class="text-center font-bold">{{ $detail->quantite }}</td>
                     <td class="text-right">{{ number_format($detail->prix_unitaire, 0, ',', ' ') }}</td>
                     <td class="text-right font-bold">{{ number_format($detail->montant_total, 0, ',', ' ') }}</td>
                 </tr>
             @endforeach
+            @if ($vente->remise > 0)
+                <tr>
+                    <td class="text-left font-bold" colspan="4">Remise accordée</td>
+                    <td class="text-right font-bold">{{ number_format($vente->remise, 0, ',', ' ') }}</td>
+                </tr>
+            @endif
+
         </tbody>
     </table>
 
     <div style="clear: both;">
         <table class="totals-table">
-            <tr>
-                <td class="bg-grey font-bold">SOUS-TOTAL</td>
-                <td class="text-right">{{ number_format($vente->montant_total, 0, ',', ' ') }}</td>
-            </tr>
-            @if ($vente->montant_remis > 0)
+            @if ($vente->remise > 0)
+                <tr>
+                    <td class="bg-grey font-bold">MONTANT TOTAL</td>
+                    <td class="text-right">{{ number_format($vente->montant_total + $vente->remise, 0, ',', ' ') }}</td>
+                </tr>
                 <tr>
                     <td class="bg-grey font-bold">REMISE (-)</td>
                     <td class="text-right text-red" style="color: red;">
-                        {{ number_format($vente->montant_remis, 0, ',', ' ') }}</td>
+                        {{ number_format($vente->remise, 0, ',', ' ') }}</td>
                 </tr>
             @endif
             <tr style="background-color: #000; color: #fff;">
                 <td class="font-bold">NET À PAYER</td>
                 <td class="text-right font-bold" style="font-size: 12pt;">
-                    {{ number_format($vente->montant_total - ($vente->montant_remis ?? 0), 0, ',', ' ') }}
+                    {{ number_format($vente->montant_total ?? 0, 0, ',', ' ') }}
                     <small style="font-size: 8pt;">{{ $boutique->devise ?? 'CFA' }}</small>
                 </td>
             </tr>
+
         </table>
+        <p>
+
+        </p>
     </div>
 
     <div style="margin-top: 150px;">
@@ -176,7 +188,7 @@
                 </td>
                 <td style="width: 50%; border: 1px dashed #ccc; padding: 20px; text-align: center; vertical-align: top;">
                     <div style="font-size: 8pt; font-weight: bold; text-transform: uppercase; margin-bottom: 50px;">
-                        Signature Client (Bon pour accord)</div>
+                        Signature Client</div>
                 </td>
             </tr>
         </table>
@@ -184,6 +196,6 @@
 
     <div
         style="margin-top: 30px; text-align: center; font-size: 8pt; color: #666; border-top: 1px solid #ccc; padding-top: 10px;">
-        {{ $boutique->footer_facture ?? 'Merci de votre confiance. Les marchandises vendues ne sont ni reprises ni échangées.' }}
+        {{ $boutique->footer_facture ?? 'Merci de votre confiance. Les marchandises vendues ne sont ni reprises ni échangées apres 48h.' }}
     </div>
 @endsection

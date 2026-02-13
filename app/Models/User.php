@@ -24,7 +24,8 @@ class User extends Authenticatable
         'password',
         'role',
         'boutique_id',
-        'is_active'
+        'is_active',
+        'boutique_limit'
     ];
 
     /**

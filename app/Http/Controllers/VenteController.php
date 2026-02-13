@@ -70,6 +70,7 @@ class VenteController extends Controller
         $request->validate([
             'vente_id' => 'required|integer',
             'produits' => 'required|array',
+            'remise' => 'numeric',
         ]);
 
         $venteId = $request->vente_id;
@@ -116,7 +117,7 @@ class VenteController extends Controller
                     'type' => $difference > 0 ? 'ajout' : 'retrait',
                     'prix_achat' => $stock ? $stock->prix_achat : 0,
                     'prix_vente' => $detailVente->prix_unitaire,
-                    'remise' => $difference > 0 ? 0 : ($nouvelleRemise / count($request->produits)), // Approximative prorata if global
+                    'remise' => $nouvelleRemise, 
                     'description' => ($difference > 0 ? 'Retour Client (Partiel)' : 'Ajustement Quantité') . ' sur Vente #' . $venteId,
                     'date' => now()
                 ]);
@@ -253,48 +254,77 @@ class VenteController extends Controller
         $user = Auth::user();
         $boutique_id = $this->getBoutiqueId();
 
-        $detailVente = DetailVente::with('vente')->where('id', $id)->firstOrFail();
-
-        if ($detailVente->vente->boutique_id != $boutique_id) {
-            return response()->json(["message" => "Action non autorisée"], 403);
-        }
-
-        $qte = $detailVente->quantite;
-        $mtt = $detailVente->montant;
-        $idProduit = $detailVente->produit_id;
-
-        $vente = $detailVente->vente;
-        $vente->montant_total -= $mtt;
-        $vente->save();
-
-        $stock = Stock::where('produit_id', $idProduit)
+        $vente = Vente::with('detailVentes')->where('id', $id)
             ->where('boutique_id', $boutique_id)
-            ->first();
+            ->firstOrFail();
 
-        if ($stock) {
-            $stock->quantite += $qte;
-            $stock->save();
+        if ($vente->statut === 'annulee') {
+            return response()->json(['message' => 'Cette vente est déjà annulée'], 400);
         }
 
-        $produit = Produit::where('id', $idProduit)->first();
+        DB::beginTransaction();
+        try {
+            $originalRemise = $vente->remise;
 
-        Inventaire::create([
-            'produit_id' => $idProduit,
-            'boutique_id' => $boutique_id,
-            'user_id' => $user->id,
-            'vente_id' => $vente->id,
-            'quantite' => $qte,
-            'type' => 'ajout',
-            'prix_achat' => $stock ? $stock->prix_achat : 0,
-            'prix_vente' => $detailVente->prix_unitaire,
-            'remise' => 0,
-            'description' => 'Annulation de Vente du ' . ($produit ? $produit->nom : 'Produit inconnu'),
-            'date' => now()
-        ]);
+            foreach ($vente->detailVentes as $detail) {
+                $stock = Stock::where('produit_id', $detail->produit_id)
+                    ->where('boutique_id', $boutique_id)
+                    ->first();
+                
+                if ($stock) {
+                    $stock->quantite += $detail->quantite;
+                    $stock->save();
+                }
 
-        $detailVente->delete();
+                $produit = Produit::find($detail->produit_id);
 
-        return response()->json(["message" => "Vente Annulée avec succès"], 200);
+                Inventaire::create([
+                    'produit_id' => $detail->produit_id,
+                    'boutique_id' => $boutique_id,
+                    'user_id' => $user->id,
+                    'vente_id' => $vente->id,
+                    'quantite' => $detail->quantite,
+                    'type' => 'ajout',
+                    'prix_achat' => $stock ? $stock->prix_achat : 0,
+                    'prix_vente' => $detail->prix_unitaire,
+                    'remise' => $originalRemise,
+                    'description' => 'Annulation de Vente #' . $vente->id . ' (' . ($produit ? $produit->nom : 'Produit inconnu') . ')',
+                    'date' => now()
+                ]);
+            }
+
+            // Gestion des paiements si c'est une vente à crédit
+            if ($vente->type_paiement === 'credit') {
+                $credits = PaiementCredit::where('vente_id', $vente->id)
+                    ->where('boutique_id', $boutique_id)
+                    ->get();
+                
+                $montant_total_paye = $credits->sum('montant');
+                
+                if ($montant_total_paye > 0) {
+                    Expense::create([
+                        'type' => "Remboursement Retour",
+                        'boutique_id' => $boutique_id,
+                        'user_id' => $user->id,
+                        'montant' => $montant_total_paye,
+                        'date' => now(),
+                        'description' => "Remboursement suite à l'annulation de la vente à crédit #" . $vente->id,
+                    ]);
+                }
+                $vente->montant_restant = 0;
+            }
+
+            $vente->montant_total = 0;
+            $vente->remise = 0;
+            $vente->statut = 'annulee';
+            $vente->save();
+
+            DB::commit();
+            return response()->json(["message" => "Vente Annulée avec succès"], 200);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(["message" => "Erreur lors de l'annulation: " . $e->getMessage()], 500);
+        }
     }
 
     public function historiqueVente()
@@ -350,10 +380,14 @@ class VenteController extends Controller
 
         // 2. Monthly Detail (More precise, including returns and costs)
         // We calculate this from Inventaire to be consistent with the audit page
-        $mouvements = Inventaire::with('produit.stock')
+        // We filter out inventory entries linked to cancelled sales
+        $mouvements = Inventaire::with(['produit.stock', 'vente'])
             ->where('boutique_id', $boutique_id)
             ->whereYear('date', $currentYear)
             ->whereNotNull('vente_id')
+            ->whereHas('vente', function($q) {
+                $q->whereIn('statut', ['validee', 'payee', 'credit']);
+            })
             ->get();
 
         $statsMensuelles = [];
@@ -378,18 +412,24 @@ class VenteController extends Controller
                 $statsMensuelles[$m]['ca'] += ($mov->quantite * $pxV);
                 $statsMensuelles[$m]['qtv'] += $mov->quantite;
                 $statsMensuelles[$m]['cout_achat'] += ($mov->quantite * $pxA);
-                
-                // Handle global remise (only once per vente_id)
-                if (!in_array($mov->vente_id, $statsMensuelles[$m]['remises_traitees'])) {
-                    $statsMensuelles[$m]['ca'] -= (float)($mov->remise ?? 0);
-                    $statsMensuelles[$m]['remises_traitees'][] = $mov->vente_id;
-                }
             } else {
                 // It's a return (ajout linked to vente_id)
                 $statsMensuelles[$m]['ca'] -= ($mov->quantite * $pxV);
                 $statsMensuelles[$m]['qtv'] -= $mov->quantite;
                 $statsMensuelles[$m]['cout_achat'] -= ($mov->quantite * $pxA);
             }
+        }
+
+        // Calculate global remises per month from the Vente table for consistency
+        $ventesAvecRemise = Vente::where('boutique_id', $boutique_id)
+            ->whereYear('date_vente', $currentYear)
+            ->where('remise', '>', 0)
+            ->whereIn('statut', ['validee', 'payee', 'credit'])
+            ->get();
+
+        foreach ($ventesAvecRemise as $v) {
+            $m = \Carbon\Carbon::parse($v->date_vente)->month;
+            $statsMensuelles[$m]['ca'] -= (float)$v->remise;
         }
 
         // Convert to numerical array and sort desc by month
@@ -448,10 +488,14 @@ class VenteController extends Controller
         $boutique_id = $this->getBoutiqueId();
 
         // Use Inventaire to calculate net stats for the specific year
-        $mouvements = Inventaire::with('produit.stock')
+        // We filter out inventory entries linked to cancelled sales
+        $mouvements = Inventaire::with(['produit.stock', 'vente'])
             ->where('boutique_id', $boutique_id)
             ->whereYear('date', $annee)
             ->whereNotNull('vente_id')
+            ->whereHas('vente', function($q) {
+                $q->whereIn('statut', ['validee', 'payee', 'credit']);
+            })
             ->get();
 
         $statsMensuelles = [];
@@ -474,16 +518,23 @@ class VenteController extends Controller
                 $statsMensuelles[$m]['ca'] += ($mov->quantite * $pxV);
                 $statsMensuelles[$m]['qtv'] += $mov->quantite;
                 $statsMensuelles[$m]['cout_achat'] += ($mov->quantite * $pxA);
-                
-                if (!in_array($mov->vente_id, $statsMensuelles[$m]['remises_traitees'])) {
-                    $statsMensuelles[$m]['ca'] -= (float)($mov->remise ?? 0);
-                    $statsMensuelles[$m]['remises_traitees'][] = $mov->vente_id;
-                }
             } else {
+                // It's a return (ajout linked to vente_id)
                 $statsMensuelles[$m]['ca'] -= ($mov->quantite * $pxV);
                 $statsMensuelles[$m]['qtv'] -= $mov->quantite;
                 $statsMensuelles[$m]['cout_achat'] -= ($mov->quantite * $pxA);
             }
+        }
+
+        $ventesAvecRemise = Vente::where('boutique_id', $boutique_id)
+            ->whereYear('date_vente', $annee)
+            ->where('remise', '>', 0)
+            ->whereIn('statut', ['validee', 'payee', 'credit'])
+            ->get();
+
+        foreach ($ventesAvecRemise as $v) {
+            $m = (int)Carbon::parse($v->date_vente)->month;
+            $statsMensuelles[$m]['ca'] -= (float)$v->remise;
         }
 
         $venteList = array_values($statsMensuelles);

@@ -204,8 +204,21 @@ class DailyReportController extends Controller
     {
         $boutique = Boutique::findOrFail($boutiqueId);
 
+        $venteAnnulee = Vente::with(['detailVentes.produit', 'client', 'user'])
+            ->where('boutique_id', $boutiqueId)
+            ->where('statut', 'annulee')
+            ->whereDate('date_vente', $date)
+            ->get();
+
+        $venteCredit = Vente::with(['detailVentes.produit', 'client', 'user'])
+            ->where('boutique_id', $boutiqueId)
+            ->where('statut', 'credit')
+            ->whereDate('date_vente', $date)
+            ->get();
+
         $ventes = Vente::with(['detailVentes.produit', 'client', 'user'])
             ->where('boutique_id', $boutiqueId)
+            ->where('statut', 'payee')
             ->whereDate('date_vente', $date)
             ->get();
 
@@ -214,35 +227,50 @@ class DailyReportController extends Controller
             ->whereDate('date', $date)
             ->get();
 
-        $ventesNet = $ventes->sum(function ($vente) {
-            return $vente->montant_total - ($vente->montant_remis ?? 0);
+        // Summing remises from all active sales
+        $totalRemise = $ventes->sum('remise') + $venteCredit->sum('remise');
+
+        // Total Net for all active sales (amount actually to be received/perceived)
+        $totalNetCash = $ventes->sum('montant_total');
+        $totalNetCredit = $venteCredit->sum('montant_total');
+        $ventes_net = $totalNetCash + $totalNetCredit;
+
+        // Vente Brut = Net + Remise
+        $ventesBrut = $ventes_net + $totalRemise;
+
+        // Vente Annulee (for information)
+        $ventesBrutAnnulee = $venteAnnulee->sum(function($v) {
+            return $v->montant_total + $v->remise;
         });
 
-        $ventesBrut = $ventes->sum('montant_total');
-        $remises = $ventes->sum('montant_remis');
         $depensesTotal = $depenses->sum('montant');
-        $beneficeNet = $ventesNet - $depensesTotal;
+        $beneficeNet = $ventes_net - $depensesTotal;
 
         $totaux = [
             'ventes_brut' => $ventesBrut,
-            'remises' => $remises,
-            'ventes_net' => $ventesNet,
+            'remises' => $totalRemise,
+            'ventes_net' => $ventes_net,
+            'ventes_annulee_net' => $venteAnnulee->sum('montant_total'),
+            'ventes_credit_net' => $totalNetCredit,
             'depenses' => $depensesTotal,
             'benefice_net' => $beneficeNet
         ];
 
         $stats = [
-            'nombre_ventes' => $ventes->count(),
+            'nombre_ventes' => $ventes->count() + $venteCredit->count(),
             'nombre_depenses' => $depenses->count(),
-            'vente_moyenne' => $ventes->count() > 0 ? $ventesNet / $ventes->count() : 0,
-            'ventes_credit' => $ventes->where('type_paiement', 'credit')->count(),
-            'ventes_cash' => $ventes->where('type_paiement', '!=', 'credit')->count()
+            'vente_moyenne' => ($ventes->count() + $venteCredit->count()) > 0 ? $ventes_net / ($ventes->count() + $venteCredit->count()) : 0,
+            'ventes_credit' => $venteCredit->count(),
+            'ventes_cash' => $ventes->count(),
+            'ventes_annulee' => $venteAnnulee->count()
         ];
 
         return [
             'boutique' => $boutique,
             'date' => $date,
             'ventes' => $ventes,
+            'ventes_annulee' => $venteAnnulee,
+            'ventes_credit' => $venteCredit,
             'depenses' => $depenses,
             'totaux' => $totaux,
             'stats' => $stats

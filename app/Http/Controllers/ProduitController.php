@@ -220,7 +220,7 @@ class ProduitController extends Controller
                         'user' => $item->user,
                         'items' => [],
                         'totalQuantite' => 0,
-                        'totalRemise' => $isReturn ? 0 : (float)($item->remise ?? 0),
+                        'totalRemise' => (float)($item->remise ?? 0),
                         'impactNet' => 0,
                         'showDetails' => false
                     ];
@@ -241,7 +241,14 @@ class ProduitController extends Controller
                 if ($item->type === 'retrait') {
                     $impact = (($item->quantite * $pxVente) - $remise) - ($item->quantite * $pxAchat);
                 } else {
-                    $impact = ($item->quantite * $pxAchat);
+                    // Logic for individual returns or reappro
+                    $isReturn = isset($item->vente_id) && $item->vente_id;
+                    if ($isReturn) {
+                        $impact = (($item->quantite * $pxVente) - $remise) - ($item->quantite * $pxAchat);
+                    } else {
+                        // For reappro, it's not a "profit" event but a cost addition
+                        $impact = 0; 
+                    }
                 }
                 
                 $groupedGroups[] = array_merge($itemArray, [
@@ -253,6 +260,9 @@ class ProduitController extends Controller
 
         // Finalize groups and update global stats
         foreach ($transactionMap as $key => &$g) {
+            // Subtract global remise from impactNet regardless of type (balanced reversal)
+            $g['impactNet'] -= $g['totalRemise'];
+
             if ($g['isReturn']) {
                 $g['description'] = count($g['items']) > 1 ? "Retour Groupé #{$g['vente_id']} (" . count($g['items']) . " articles)" : $g['items'][0]->description;
                 
@@ -266,7 +276,6 @@ class ProduitController extends Controller
                 $stats['valeurVenteSortante'] -= $valVente;
                 $stats['beneficeTheorique'] -= $g['impactNet'];
             } else {
-                $g['impactNet'] -= $g['totalRemise'];
                 if (count($g['items']) > 1) {
                     $g['description'] = "Vente Groupée #{$g['vente_id']} (" . count($g['items']) . " articles)";
                 }
@@ -315,8 +324,8 @@ class ProduitController extends Controller
             } else {
                 if (isset($item['vente_id']) && $item['vente_id']) {
                     $stats['totalSorties'] -= $qte;
-                    $stats['valeurVenteSortante'] -= ($qte * $pxVente);
-                    $stats['beneficeTheorique'] -= (($qte * $pxVente) - ($qte * $pxAchat));
+                    $stats['valeurVenteSortante'] -= (($qte * $pxVente) - $remise);
+                    $stats['beneficeTheorique'] -= $item['impactNet']; 
                 } else {
                     $stats['totalEntrees'] += $qte;
                     $stats['valeurAchatEntrante'] += ($qte * $pxAchat);

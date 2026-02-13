@@ -82,6 +82,7 @@ class FactureController extends Controller
             'montant_total' => $facture->montant_total,
             'montant_remis' => $facture->factureVentes->first()->vente->detailVentes->first()->remise ?? 0,
             'nomBoutique' => $nomBoutique,
+            'statut' =>$facture->statut,
             'adresseBoutique' => $adresseBoutique,
             'telephoneBoutique' => $telephoneBoutique,
             'produitAchat' => $produitAchat

@@ -42,6 +42,7 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
 
     // Admin User Management
     Route::get('/admins', [SuperAdminController::class, 'adminsIndex'])->name('admin.admins.index');
+    Route::post('/admins/{user}/update-limit', [SuperAdminController::class, 'updateBoutiqueLimit'])->name('admin.admins.update-limit');
     Route::delete('/admins/{admin}', [SuperAdminController::class, 'adminDestroy'])->name('admin.admins.destroy');
 });
 

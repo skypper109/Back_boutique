@@ -41,7 +41,7 @@ class SuperAdminController extends Controller
 
     public function boutiquesIndex()
     {
-        $boutiques = Boutique::all();
+        $boutiques = Boutique::with('creator')->get();
         return view('admin.boutiques.index', compact('boutiques'));
     }
 
@@ -87,7 +87,8 @@ class SuperAdminController extends Controller
                 'password' => Hash::make($request->password_admin),
                 'role' => 'admin',
                 'boutique_id' => null,
-                'is_active' => true
+                'is_active' => true,
+                'boutique_limit' => 2 // Default limit for new admins
             ]);
 
             $boutique = Boutique::create([
@@ -145,6 +146,18 @@ class SuperAdminController extends Controller
         }
         $admin->delete();
         return redirect()->route('admin.admins.index')->with('success', 'Administrateur supprimé avec succès.');
+    }
+
+    public function updateBoutiqueLimit(Request $request, User $user)
+    {
+        $request->validate([
+            'boutique_limit' => 'required|integer|min:1',
+        ]);
+
+        $user->boutique_limit = $request->boutique_limit;
+        $user->save();
+
+        return back()->with('success', "Limite de boutiques mise à jour pour {$user->name}.");
     }
 
     public function toggleBoutiqueStatus(Boutique $boutique)

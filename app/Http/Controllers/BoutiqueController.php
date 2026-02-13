@@ -104,7 +104,16 @@ class BoutiqueController extends Controller
                 'format_facture' => 'nullable|string',
             ]);
 
-            $fields['user_id'] = Auth::id();
+            $user = Auth::user();
+            $boutiqueCount = Boutique::where('user_id', $user->id)->count();
+
+            if ($boutiqueCount >= $user->boutique_limit) {
+                return response()->json([
+                    'message' => "Limite de boutiques atteinte ({$user->boutique_limit}). Veuillez contacter le support pour augmenter votre capacité."
+                ], 403);
+            }
+
+            $fields['user_id'] = $user->id;
             $fields['is_active'] = true;
 
             \Illuminate\Support\Facades\Log::info('Creating boutique with fields:', $fields);
@@ -154,9 +163,17 @@ class BoutiqueController extends Controller
                     'manager.password' => 'required|string|min:6',
                 ]);
 
-                // 2. Create Boutique
+                // 2. Check Limit
+                $user = Auth::user();
+                $boutiqueCount = Boutique::where('user_id', $user->id)->count();
+
+                if ($boutiqueCount >= $user->boutique_limit) {
+                    throw new \Exception("Limite de boutiques atteinte ({$user->boutique_limit}).");
+                }
+
+                // 3. Create Boutique
                 $boutiqueFields = $request->input('boutique');
-                $boutiqueFields['user_id'] = Auth::id(); // The admin who created it
+                $boutiqueFields['user_id'] = $user->id; // The admin who created it
                 $boutiqueFields['is_active'] = true;
                 $boutique = Boutique::create($boutiqueFields);
 

@@ -175,7 +175,7 @@
                 @foreach ($paiements as $paiement)
                     <tr>
                         <td class="text-center">
-                            {{ \Carbon\Carbon::parse($paiement->date_paiement)->format('d/m/Y HH:mm') }}
+                            {{ \Carbon\Carbon::parse($paiement->date_paiement)->format('d/m/Y H:i') }}
                         </td>
                         <td class="text-center font-bold">{{ strtoupper($paiement->mode_paiement) }}</td>
                         <td class="text-right font-bold">{{ number_format($paiement->montant, 0, ',', ' ') }}

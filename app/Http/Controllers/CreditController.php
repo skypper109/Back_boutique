@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Vente;
 use App\Models\Client;
+use App\Models\FactureVente;
+use App\Models\Facture;
 use App\Models\PaiementCredit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -99,22 +101,20 @@ class CreditController extends Controller
             if ($newRemaining <= 0) {
                 $vente->montant_restant = 0;
                 $vente->statut = 'payee';
-                $vente->save();
 
                 // Update facture status to payée if exists
-                $factureVente = FactureVente::where('vente_id',$vente->id)->first();
+                $factureVente = FactureVente::where('vente_id',$request->vente_id)->first();
                 if ($factureVente) {
                     $facture = Facture::where('id',$factureVente->facture_id)->first();
                     if ($facture) {
                         $facture->statut = 'payée';
-                        $facture->save();
                     }
+                    $facture->save();
                 }
             } else {
                 $vente->montant_restant = $newRemaining;
-                $vente->save();
             }
-
+            $vente->save();
             DB::commit();
             return response()->json(['message' => 'Paiement enregistré avec succès', 'paiement' => $paiement], 201);
         } catch (\Exception $e) {

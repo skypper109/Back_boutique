@@ -213,14 +213,14 @@ class ProduitController extends Controller
                         'isGroup' => true,
                         'vente_id' => $item->vente_id,
                         'date' => $item->date,
-                        'created_at' => $item->created_at,
+                        'created_at' => (string)$item->created_at,
                         'type' => $item->type,
                         'isReturn' => $isReturn,
                         'description' => $item->description,
                         'user' => $item->user,
                         'items' => [],
                         'totalQuantite' => 0,
-                        'totalRemise' => (float)($item->remise ?? 0),
+                        'totalRemise' => 0, 
                         'impactNet' => 0,
                         'showDetails' => false
                     ];
@@ -228,14 +228,15 @@ class ProduitController extends Controller
                 
                 $transactionMap[$groupKey]['items'][] = $item;
                 $transactionMap[$groupKey]['totalQuantite'] += $item->quantite;
+                $transactionMap[$groupKey]['totalRemise'] += (float)($item->remise ?? 0);
                 
-                $pxAchat = $item->prix_achat ?? ($item->produit->stock->prix_achat ?? 0);
-                $pxVente = $item->prix_vente ?? ($item->produit->stock->prix_vente ?? 0);
+                $pxAchat = $item->prix_achat ?? ($item->produit?->stock?->prix_achat ?? 0);
+                $pxVente = $item->prix_vente ?? ($item->produit?->stock?->prix_vente ?? 0);
                 $transactionMap[$groupKey]['impactNet'] += ($item->quantite * ($pxVente - $pxAchat));
             } else {
                 $itemArray = $item->toArray();
-                $pxAchat = $item->prix_achat ?? ($item->produit->stock->prix_achat ?? 0);
-                $pxVente = $item->prix_vente ?? ($item->produit->stock->prix_vente ?? 0);
+                $pxAchat = $item->prix_achat ?? ($item->produit?->stock?->prix_achat ?? 0);
+                $pxVente = $item->prix_vente ?? ($item->produit?->stock?->prix_vente ?? 0);
                 $remise = (float)($item->remise ?? 0);
                 
                 if ($item->type === 'retrait') {
@@ -270,10 +271,11 @@ class ProduitController extends Controller
                 $stats['totalSorties'] -= $g['totalQuantite'];
                 $valVente = 0;
                 foreach($g['items'] as $it) {
-                    $pxV = $it->prix_vente ?? ($it->produit->stock->prix_vente ?? 0);
+                    $pxV = $it->prix_vente ?? ($it->produit?->stock?->prix_vente ?? 0);
                     $valVente += ($it->quantite * $pxV);
                 }
-                $stats['valeurVenteSortante'] -= $valVente;
+                // Corrected: Subtract net value (gross - remise) for returns
+                $stats['valeurVenteSortante'] -= ($valVente - $g['totalRemise']);
                 $stats['beneficeTheorique'] -= $g['impactNet'];
             } else {
                 if (count($g['items']) > 1) {
@@ -285,7 +287,7 @@ class ProduitController extends Controller
                     $stats['totalSorties'] += $g['totalQuantite'];
                     $valVente = 0;
                     foreach($g['items'] as $it) {
-                        $pxV = $it->prix_vente ?? ($it->produit->stock->prix_vente ?? 0);
+                        $pxV = $it->prix_vente ?? ($it->produit?->stock?->prix_vente ?? 0);
                         $valVente += ($it->quantite * $pxV);
                     }
                     $stats['valeurVenteSortante'] += ($valVente - $g['totalRemise']);
@@ -295,7 +297,7 @@ class ProduitController extends Controller
                     $stats['totalEntrees'] += $g['totalQuantite'];
                     $valAchat = 0;
                     foreach($g['items'] as $it) {
-                        $pxA = $it->prix_achat ?? ($it->produit->stock->prix_achat ?? 0);
+                        $pxA = $it->prix_achat ?? ($it->produit?->stock?->prix_achat ?? 0);
                         $valAchat += ($it->quantite * $pxA);
                     }
                     $stats['valeurAchatEntrante'] += $valAchat;
@@ -309,8 +311,17 @@ class ProduitController extends Controller
             if (isset($item['isGroup']) && $item['isGroup']) continue;
             if ($item['type'] === 'paiement') continue;
 
-            $pxAchat = $item['prix_achat'] ?? ($item['produit']['stock']['prix_achat'] ?? 0);
-            $pxVente = $item['prix_vente'] ?? ($item['produit']['stock']['prix_vente'] ?? 0);
+            // Robust access for virtual records (global discounts)
+            $pxAchat = $item['prix_achat'] ?? 0;
+            if ($pxAchat == 0 && isset($item['produit']['stock']['prix_achat'])) {
+                $pxAchat = $item['produit']['stock']['prix_achat'];
+            }
+
+            $pxVente = $item['prix_vente'] ?? 0;
+            if ($pxVente == 0 && isset($item['produit']['stock']['prix_vente'])) {
+                $pxVente = $item['produit']['stock']['prix_vente'];
+            }
+
             $remise = (float)($item['remise'] ?? 0);
             $qte = (float)$item['quantite'];
 
@@ -320,12 +331,12 @@ class ProduitController extends Controller
                 if (!$isCreditSale) {
                     $stats['valeurVenteSortante'] += (($qte * $pxVente) - $remise);
                 }
-                $stats['beneficeTheorique'] += $item['impactNet'];
+                $stats['beneficeTheorique'] += (float)($item['impactNet'] ?? 0);
             } else {
                 if (isset($item['vente_id']) && $item['vente_id']) {
                     $stats['totalSorties'] -= $qte;
                     $stats['valeurVenteSortante'] -= (($qte * $pxVente) - $remise);
-                    $stats['beneficeTheorique'] -= $item['impactNet']; 
+                    $stats['beneficeTheorique'] -= (float)($item['impactNet'] ?? 0); 
                 } else {
                     $stats['totalEntrees'] += $qte;
                     $stats['valeurAchatEntrante'] += ($qte * $pxAchat);
@@ -335,12 +346,12 @@ class ProduitController extends Controller
 
         $stats['netMouvement'] = $stats['totalEntrees'] - $stats['totalSorties'];
 
-        // Combine and sort finally by date
+        // Combine and sort finally by created_at (most precise) then date
         $finalList = array_merge($groupedGroups, $formattedPayments);
         usort($finalList, function($a, $b) {
-            $dateA = $a['date'] ?? $a['created_at'];
-            $dateB = $b['date'] ?? $b['created_at'];
-            return strcmp($dateB, $dateA);
+            $dateA = $a['created_at'] ?? $a['date'];
+            $dateB = $b['created_at'] ?? $b['date'];
+            return strcmp((string)$dateB, (string)$dateA);
         });
 
         return response()->json([

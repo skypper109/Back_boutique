@@ -82,130 +82,159 @@ class VenteController extends Controller
             return response()->json(['message' => 'Boutique non identifiée'], 400);
         }
 
-        $nouveauMontantTotal = 0;
-        $nouvelleRemise = $request->input('remise', $vente->remise);
+        $nouveauMontantBrut = 0;
+        $nouvelleRemiseTotale = $request->input('remise', 0); // User can adjust global remise too
 
-        foreach ($request->produits as $produitData) {
-            $produitId = $produitData['produit']['id'];
-            $nouvelleQte = $produitData['quantite'];
+        DB::beginTransaction();
+        try {
+            foreach ($request->produits as $produitData) {
+                // Handle different payload structures
+                $produitId = $produitData['produit']['id'] ?? $produitData['produit_id'];
+                $nouvelleQte = $produitData['quantite'];
+                $nouveauPrixU = $produitData['prix_unitaire'] ?? null;
+                $nouvelleRemiseLigne = $produitData['remise'] ?? 0;
 
-            $detailVente = DetailVente::where('vente_id', $venteId)
-                ->where('produit_id', $produitId)
-                ->first();
-
-            if (!$detailVente) continue;
-
-            $ancienneQte = $detailVente->quantite;
-            $difference = $ancienneQte - $nouvelleQte;
-
-            if ($difference != 0) {
-                $stock = Stock::where('produit_id', $produitId)
-                    ->where('boutique_id', $boutique_id)
+                $detailVente = DetailVente::where('vente_id', $venteId)
+                    ->where('produit_id', $produitId)
                     ->first();
 
-                if ($stock) {
-                    $stock->quantite += $difference;
-                    $stock->save();
+                if (!$detailVente) continue;
+
+                $ancienneQte = $detailVente->quantite;
+                $ancienPrixU = $detailVente->prix_unitaire;
+                $ancienneRemiseLigne = $detailVente->remise;
+
+                $difference = $ancienneQte - $nouvelleQte;
+                $diffRemise = $ancienneRemiseLigne - $nouvelleRemiseLigne;
+                $diffPrix = ($nouveauPrixU !== null) ? ($nouveauPrixU - $ancienPrixU) : 0;
+
+                // Update unit price if provided
+                if ($nouveauPrixU !== null) {
+                    $detailVente->prix_unitaire = $nouveauPrixU;
                 }
 
-                Inventaire::create([
-                    'produit_id' => $produitId,
-                    'boutique_id' => $boutique_id,
-                    'user_id' => $user->id,
-                    'vente_id' => $vente->id,
-                    'quantite' => abs($difference),
-                    'type' => $difference > 0 ? 'ajout' : 'retrait',
-                    'prix_achat' => $stock ? $stock->prix_achat : 0,
-                    'prix_vente' => $detailVente->prix_unitaire,
-                    'remise' => $nouvelleRemise, 
-                    'description' => ($difference > 0 ? 'Retour Client (Partiel)' : 'Ajustement Quantité') . ' sur Vente #' . $venteId,
-                    'date' => now()
-                ]);
+                if ($difference != 0 || $diffRemise != 0 || $diffPrix != 0) {
+                    $stock = Stock::where('produit_id', $produitId)
+                        ->where('boutique_id', $boutique_id)
+                        ->first();
+
+                    if ($difference != 0 && $stock) {
+                        $stock->quantite += $difference;
+                        $stock->save();
+                    }
+
+                    $remiseAudit = $diffRemise + ($diffPrix * $nouvelleQte); // Correction for profit impact
+
+                    Inventaire::create([
+                        'produit_id' => $produitId,
+                        'boutique_id' => $boutique_id,
+                        'user_id' => $user->id,
+                        'vente_id' => $vente->id,
+                        'quantite' => abs($difference),
+                        'type' => $difference >= 0 ? 'ajout' : 'retrait',
+                        'prix_achat' => $stock ? $stock->prix_achat : 0,
+                        'prix_vente' => $nouveauPrixU ?? $detailVente->prix_unitaire,
+                        'remise' => $remiseAudit, 
+                        'description' => ($difference > 0 ? 'Retour Client (Audit)' : ($difference < 0 ? 'Ajustement Vente' : 'Correction Prix/Remise')) . ' sur Vente #' . $venteId,
+                        'date' => now()
+                    ]);
+                }
 
                 if ($nouvelleQte <= 0) {
                     $detailVente->delete();
                 } else {
                     $detailVente->quantite = $nouvelleQte;
+                    $detailVente->prix_unitaire = $nouveauPrixU ?? $detailVente->prix_unitaire;
+                    $detailVente->remise = $nouvelleRemiseLigne;
                     $detailVente->montant = $detailVente->prix_unitaire * $nouvelleQte;
                     $detailVente->montant_total = $detailVente->montant;
-                    $detailVente->montant_paye = $detailVente->montant;
+                    $detailVente->montant_paye = $detailVente->montant - $nouvelleRemiseLigne;
                     $detailVente->save();
-                    $nouveauMontantTotal += $detailVente->montant;
+                    
+                    $nouveauMontantBrut += $detailVente->montant;
                 }
-            } else {
-                $nouveauMontantTotal += $detailVente->montant;
             }
-        }
 
-        // Apply global remise to the new total
-        $montantFinalApresRemise = $nouveauMontantTotal - $nouvelleRemise;
+            // Delta for the Global Extra Reduction
+            $ancienneRemiseTotale = (float)$vente->remise;
+            $diffRemiseGlobale = $ancienneRemiseTotale - $nouvelleRemiseTotale;
 
-        if ($nouveauMontantTotal <= 0) {
-            if ($vente->type_paiement == 'credit') {
-                // If payments were already made, refund them
-                $credits = PaiementCredit::where('vente_id', $venteId)
-                    ->where('boutique_id', $boutique_id)
-                    ->get();
-                $montant_total_paye = $credits->sum('montant');
-                if ($montant_total_paye > 0) {
-                    Expense::create([
-                        'type' => "Remboursement Retour",
-                        'boutique_id' => $boutique_id,
-                        'user_id' => $user->id,
-                        'montant' => $montant_total_paye,
-                        'date' => now(),
-                        'description' => "Remboursement suite au retour complet de la vente #" . $venteId,
-                    ]);
-                }
-
-                $vente->montant_restant = 0;
-                $vente->statut = 'Credit annule';
-            } else {
-                $vente->statut = 'annulee';
-            }
-            $vente->remise = 0;
-            $vente->save();
-
-            return response()->json(['message' => 'Vente annulée car tous les produits ont été retournés'], 200);
-        }
-
-        if ($vente->type_paiement == 'credit') {
-            $ancienMontantTotalVente = $vente->montant_total; // This was total - original_remise
-            $vente->montant_total = $montantFinalApresRemise;
-            $vente->remise = $nouvelleRemise;
-            
-            $valeurRetour = $ancienMontantTotalVente - $montantFinalApresRemise;
-            $ancienRestant = $vente->montant_restant;
-
-            if ($valeurRetour > $ancienRestant) {
-                // Le montant du retour dépasse la dette actuelle
-                $surplusARembourser = $valeurRetour - $ancienRestant;
-                
-                Expense::create([
-                    'type' => "Remboursement Retour",
+            if ($diffRemiseGlobale != 0) {
+                Inventaire::create([
+                    'produit_id' => null,
                     'boutique_id' => $boutique_id,
                     'user_id' => $user->id,
-                    'montant' => $surplusARembourser,
-                    'date' => now(),
-                    'description' => "Remboursement de surplus (Rendu au client) suite au retour produit sur la vente à crédit #" . $venteId . ". Retour net: " . number_format($valeurRetour, 0, '.', ' ') . " FCFA, Dette soldée: " . number_format($ancienRestant, 0, '.', ' ') . " FCFA.",
+                    'vente_id' => $vente->id,
+                    'quantite' => 0,
+                    'type' => $diffRemiseGlobale >= 0 ? 'ajout' : 'retrait',
+                    'prix_achat' => 0,
+                    'prix_vente' => 0,
+                    'remise' => $diffRemiseGlobale,
+                    'description' => 'Ajustement Remise Globale (Audit Vente #' . $venteId . ')',
+                    'date' => now()
                 ]);
-
-                $vente->montant_restant = 0;
-                $vente->statut = 'payee';
-            } else {
-                // On réduit simplement la dette
-                $vente->montant_restant = $ancienRestant - $valeurRetour;
-                if ($vente->montant_restant == 0) {
-                    $vente->statut = 'payee';
-                }
             }
-        } else {
-            $vente->montant_total = $montantFinalApresRemise;
-            $vente->remise = $nouvelleRemise;
-        }
-        $vente->save();
 
-        return response()->json(['message' => 'Vente modifiée avec succès', 'nouveau_montant' => $montantFinalApresRemise], 200);
+            // Recalculate Global Sale Total
+            $montantFinalApresRemise = $nouveauMontantBrut - $nouvelleRemiseTotale;
+
+            if ($nouveauMontantBrut <= 0) {
+                // Total cancellation logic...
+                if ($vente->type_paiement == 'credit') {
+                    $credits = PaiementCredit::where('vente_id', $venteId)->get();
+                    $montant_total_paye = $credits->sum('montant');
+                    if ($montant_total_paye > 0) {
+                        Expense::create([
+                            'type' => "Remboursement Retour",
+                            'boutique_id' => $boutique_id,
+                            'user_id' => $user->id,
+                            'montant' => $montant_total_paye,
+                            'date' => now(),
+                            'description' => "Remboursement suite au retour complet de la vente #" . $venteId,
+                        ]);
+                    }
+                    $vente->montant_restant = 0;
+                    $vente->statut = 'Credit annule';
+                } else {
+                    $vente->statut = 'annulee';
+                }
+                $vente->montant_total = 0;
+                $vente->remise = 0;
+            } else {
+                if ($vente->type_paiement == 'credit') {
+                    $ancienNet = $vente->montant_total;
+                    $valeurRetour = $ancienNet - $montantFinalApresRemise;
+                    $ancienRestant = $vente->montant_restant;
+
+                    if ($valeurRetour > $ancienRestant) {
+                        $surplus = $valeurRetour - $ancienRestant;
+                        Expense::create([
+                            'type' => "Remboursement Retour",
+                            'boutique_id' => $boutique_id,
+                            'user_id' => $user->id,
+                            'montant' => $surplus,
+                            'date' => now(),
+                            'description' => "Remboursement surplus audit sur vente #" . $venteId,
+                        ]);
+                        $vente->montant_restant = 0;
+                        $vente->statut = 'payee';
+                    } else {
+                        $vente->montant_restant = $ancienRestant - $valeurRetour;
+                        if ($vente->montant_restant <= 0) $vente->statut = 'payee';
+                    }
+                }
+                $vente->montant_total = $montantFinalApresRemise;
+                $vente->remise = $nouvelleRemiseTotale;
+            }
+
+            $vente->save();
+            DB::commit();
+
+            return response()->json(['message' => 'Vente rectifiée avec succès', 'nouveau_montant' => $montantFinalApresRemise], 200);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => $e->getMessage()], 400);
+        }
     }
 
     public function supprimerVente($id)
@@ -264,7 +293,8 @@ class VenteController extends Controller
 
         DB::beginTransaction();
         try {
-            $originalRemise = $vente->remise;
+            $originalRemise = (float)$vente->remise;
+            $sumLineRemises = 0;
 
             foreach ($vente->detailVentes as $detail) {
                 $stock = Stock::where('produit_id', $detail->produit_id)
@@ -277,6 +307,8 @@ class VenteController extends Controller
                 }
 
                 $produit = Produit::find($detail->produit_id);
+                $lineRemise = (float)($detail->remise ?? 0);
+                $sumLineRemises += $lineRemise;
 
                 Inventaire::create([
                     'produit_id' => $detail->produit_id,
@@ -287,8 +319,26 @@ class VenteController extends Controller
                     'type' => 'ajout',
                     'prix_achat' => $stock ? $stock->prix_achat : 0,
                     'prix_vente' => $detail->prix_unitaire,
-                    'remise' => $originalRemise,
+                    'remise' => $lineRemise, // FIXED: Correct line reduction
                     'description' => 'Annulation de Vente #' . $vente->id . ' (' . ($produit ? $produit->nom : 'Produit inconnu') . ')',
+                    'date' => now()
+                ]);
+            }
+
+            // Global discount cancellation
+            $extraReduction = $originalRemise - $sumLineRemises;
+            if ($extraReduction != 0) {
+                Inventaire::create([
+                    'produit_id' => null,
+                    'boutique_id' => $boutique_id,
+                    'user_id' => $user->id,
+                    'vente_id' => $vente->id,
+                    'quantite' => 0,
+                    'type' => 'ajout',
+                    'prix_achat' => 0,
+                    'prix_vente' => 0,
+                    'remise' => $extraReduction,
+                    'description' => 'Annulation Remise Globale (Vente #' . $vente->id . ')',
                     'date' => now()
                 ]);
             }
@@ -725,22 +775,23 @@ class VenteController extends Controller
                 $vente->montant_restant = $request->montant_total;
             } else {
                 $vente->remise = $request->remise ?? 0;
-            $vente->statut = ($vente->type_paiement === 'credit') ? 'credit' : 'payee';
+                $vente->statut = ($vente->type_paiement === 'credit') ? 'credit' : 'payee';
                 $vente->montant_restant = ($vente->type_paiement === 'credit')
                     ? ($request->montant_total - $vente->montant_avance)
                     : 0;
             }
 
-            $vente->date_vente = $request->input('date') ?? now()->format('Y-m-d');
+            $vente->date_vente = $request->date ?? now()->format('Y-m-d');
             $vente->save();
 
-            foreach ($request->produits as $item) {
-                // Robust ID extraction (handles both {produits: {id: 1}} and {id: 1})
-                $pId = isset($item['produits']['id']) ? $item['produits']['id'] : ($item['id'] ?? null);
+            $sumLineRemises = 0;
 
-                if (!$pId) {
-                    throw new \Exception("ID produit manquant dans la requête");
-                }
+            foreach ($request->produits as $item) {
+                $pId = $item['produits']['id'] ?? 0;
+
+                // if (!$pId) {
+                //     throw new \Exception("ID produit manquant dans la requête");
+                // }
 
                 $pNom = isset($item['produits']['nom']) ? $item['produits']['nom'] : ($item['nom'] ?? "Produit #$pId");
 
@@ -761,14 +812,16 @@ class VenteController extends Controller
                 $detail->produit_id = $pId;
                 $detail->quantite = $item['quantite'];
 
-                // Robust price extraction
-                $prixU = $item['prix'] ?? ($item['produits']['stock']['prix_vente'] ?? ($stock->prix_vente ?? 0));
+                // Custom prices and discounts
+                $prixU = $item['prix_vendu'] ?? ($item['prix'] ?? ($item['produits']['stock']['prix_vente'] ?? ($stock->prix_vente ?? 0)));
+                $remiseLine = ($item['remise_unitaire'] ?? 0) * $item['quantite'];
+                $sumLineRemises += $remiseLine;
 
                 $detail->prix_unitaire = $prixU;
                 $detail->montant = $prixU * $item['quantite'];
-                $detail->remise = $request->remise ?? 0;
-                $detail->montant_total = $item['montant_total'] ?? $detail->montant;
-                $detail->montant_paye = $detail->montant_total - $request->remise;
+                $detail->remise = $remiseLine;
+                $detail->montant_total = $detail->montant;
+                $detail->montant_paye = $detail->montant - $remiseLine;
                 $detail->quantite_restante = $item['quantite'];
                 $detail->save();
 
@@ -782,9 +835,29 @@ class VenteController extends Controller
                         'type' => 'retrait',
                         'prix_achat' => $stock ? $stock->prix_achat : 0,
                         'prix_vente' => $prixU,
-                        'remise' => $request->remise ?? 0,
-                        'description' =>$vente->statut == 'credit' ? "Produit ".$pNom . " vendu a credit " : "Vente du produit # ".(isset($item['produits']['reference']) ? $item['produits']['reference'] : ($item['reference'] ?? "Produit #$pId")),
-                        'date' => $request->input('date') ?? now()->format('Y-m-d')
+                        'remise' => $remiseLine,
+                        'description' => $vente->statut == 'credit' ? "Produit " . $pNom . " vendu a credit " : "Vente du produit # " . (isset($item['produits']['reference']) ? $item['produits']['reference'] : ($item['reference'] ?? "Produit #$pId")),
+                        'date' => $vente->date_vente
+                    ]);
+                }
+            }
+
+            // Create virtual Inventaire record for the extra global reduction
+            if (!$is_proforma) {
+                $extraReduction = (float)$vente->remise - $sumLineRemises;
+                if ($extraReduction != 0) {
+                    Inventaire::create([
+                        'produit_id' => null,
+                        'boutique_id' => $boutique_id,
+                        'user_id' => $user->id,
+                        'vente_id' => $vente->id,
+                        'quantite' => 0,
+                        'type' => 'retrait',
+                        'prix_achat' => 0,
+                        'prix_vente' => 0,
+                        'remise' => $extraReduction,
+                        'description' => 'Remise Globale Additionnelle (Vente #' . $vente->id . ')',
+                        'date' => $vente->date_vente
                     ]);
                 }
             }
@@ -793,8 +866,8 @@ class VenteController extends Controller
                 $facture = Facture::create([
                     'client_id' => $client_id,
                     'boutique_id' => $boutique_id,
-                    'montant_total' => $request->montant_total,
-                    'date_facturation' => $request->input('date') ?? now()->format('Y-m-d'),
+                    'montant_total' => $vente->montant_total,
+                    'date_facturation' => $vente->date_vente,
                     'statut' => ($vente->type_paiement === 'credit' ? 'en attente' : 'payée'),
                     'description' => 'Facture Vente #' . $vente->id
                 ]);
@@ -845,6 +918,8 @@ class VenteController extends Controller
                 $stock->quantite -= $detail->quantite;
                 $stock->save();
 
+                $lineRemise = (float)($detail->remise ?? 0);
+
                 // Log Inventory
                 Inventaire::create([
                     'produit_id' => $detail->produit_id,
@@ -855,8 +930,29 @@ class VenteController extends Controller
                     'type' => 'retrait',
                     'prix_achat' => $stock ? $stock->prix_achat : 0,
                     'prix_vente' => $detail->prix_unitaire,
-                    'remise' => $detail->remise ?? 0,
+                    'remise' => $lineRemise,
                     'description' => 'Conversion Pro-forma #' . $vente->id . ' vers Vente',
+                    'date' => now()->format('Y-m-d')
+                ]);
+            }
+
+            // Virtual record for extra reduction in conversion too
+            $totalLineRemises = $vente->detailVentes->sum('remise');
+            $venteRemise = (float)$request->input('remise', $totalLineRemises);
+            $extraReduction = $venteRemise - $totalLineRemises;
+            
+            if ($extraReduction != 0) {
+                Inventaire::create([
+                    'produit_id' => null,
+                    'boutique_id' => $boutique_id,
+                    'user_id' => $user->id,
+                    'vente_id' => $vente->id,
+                    'quantite' => 0,
+                    'type' => 'retrait',
+                    'prix_achat' => 0,
+                    'prix_vente' => 0,
+                    'remise' => $extraReduction,
+                    'description' => 'Remise Globale (Conversion pro-forma #' . $vente->id . ')',
                     'date' => now()->format('Y-m-d')
                 ]);
             }

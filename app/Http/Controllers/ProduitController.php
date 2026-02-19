@@ -140,17 +140,49 @@ class ProduitController extends Controller
         return response()->json($produits, 200);
     }
 
-    // Pour la methode qui nous recupere l'inventaire de l'ensemble des produits
+    // Chargement adaptatif : ajuste la plage de dates selon le volume de données
     public function inventaire()
     {
         $boutique_id = $this->getBoutiqueId();
+        $MAX_ROWS = 150; // Seuil au-delà duquel on réduit la plage
+
+        // Plages à tester dans l'ordre : 3 jours → 2 jours → 1 jour
+        $ranges = [2, 1, 0]; // subDays(n) → 3j, 2j, 1j
+        $startDate = Carbon::now()->startOfDay(); // fallback : aujourd'hui
+
+        foreach ($ranges as $daysBack) {
+            $candidate = Carbon::now()->subDays($daysBack)->startOfDay();
+            $candidateStr = $candidate->format('Y-m-d');
+
+            // COUNT rapide (sans jointures) pour estimer le volume
+            $count = Inventaire::where('boutique_id', $boutique_id)
+                ->whereHas('produit')
+                ->where('date', '>=', $candidateStr)
+                ->count();
+
+            $countPayments = \App\Models\PaiementCredit::where('boutique_id', $boutique_id)
+                ->where('date_paiement', '>=', $candidateStr)
+                ->count();
+
+            if (($count + $countPayments) <= $MAX_ROWS || $daysBack === 0) {
+                // Volume acceptable ou dernier recours (1 jour) → on utilise cette plage
+                $startDate = $candidate;
+                break;
+            }
+            // Sinon on continue avec une plage plus courte
+        }
+
+        $startDateStr = $startDate->format('Y-m-d');
+
         $inventaires = Inventaire::with('produit.stock', 'user', 'boutique')
             ->whereHas('produit')
             ->where('boutique_id', $boutique_id)
+            ->where('date', '>=', $startDateStr)
             ->orderBy('created_at', 'desc')->get();
 
         $payments = \App\Models\PaiementCredit::with(['vente.client', 'user'])
             ->where('boutique_id', $boutique_id)
+            ->where('date_paiement', '>=', $startDateStr)
             ->orderBy('date_paiement', 'desc')
             ->get();
 

@@ -26,17 +26,19 @@ class DailyReportController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
-        $boutiqueId = ($user && $user->role === 'admin') ? $request->input('boutique_id') : ($user ? $user->boutique_id : null);
+        
+        $boutique_id = $this->getBoutiqueId();
 
         $query = DailyReport::with('boutique')
-            ->when($boutiqueId, fn($q) => $q->where('boutique_id', $boutiqueId))
-            ->orderBy('date', 'desc');
+            ->when($boutique_id, fn($q) => $q->where('boutique_id', $boutique_id))
+            ->orderBy('date', 'desc')
+            ->limit(3);
 
         if ($request->has('start_date') && $request->has('end_date')) {
             $query->whereBetween('date', [$request->start_date, $request->end_date]);
         }
 
-        $reports = $query->paginate(20);
+        $reports = $query->paginate(3);
 
         return response()->json($reports);
     }
@@ -50,10 +52,8 @@ class DailyReportController extends Controller
         ]);
 
         $user = Auth::user();
-        $boutiqueId = ($user && $user->role === 'admin') 
-            ? ($request->boutique_id ?? Boutique::first()->id)
-            : ($user ? $user->boutique_id : ($request->boutique_id ?? Boutique::first()->id));
-
+        
+        $boutiqueId = $this->getBoutiqueId();
         $date = Carbon::parse($request->date)->format('Y-m-d');
 
         try {
@@ -218,6 +218,7 @@ class DailyReportController extends Controller
 
         $ventes = Vente::with(['detailVentes.produit', 'client', 'user'])
             ->where('boutique_id', $boutiqueId)
+            ->where('statut','annulee')
             ->where('statut', 'payee')
             ->whereDate('date_vente', $date)
             ->get();

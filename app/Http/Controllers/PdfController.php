@@ -123,9 +123,11 @@ class PdfController extends Controller
                         ->findOrFail($id);
                 }
                 
+                $strategy = \App\Services\NatureStrategyFactory::make($vente->boutique);
                 return [
                     'vente' => $vente,
                     'boutique' => $vente->boutique,
+                    'strategy' => $strategy,
                     'type' => $type,
                     'date' => now()
                 ];
@@ -133,10 +135,11 @@ class PdfController extends Controller
                 $vente = Vente::with(['detailVentes.produit', 'client', 'user', 'boutique'])
                     ->when($boutiqueId, fn($q) => $q->where('boutique_id', $boutiqueId))
                     ->findOrFail($id);
-                
+                $strategy = \App\Services\NatureStrategyFactory::make($vente->boutique);
                 return [
                     'vente' => $vente,
                     'boutique' => $vente->boutique,
+                    'strategy' => $strategy,
                     'type' => $type,
                     'date' => now()
                 ];

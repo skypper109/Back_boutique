@@ -126,7 +126,10 @@
             <tr>
                 <th style="width: 10%;">REF</th>
                 <th style="width: 50%;">DÉSIGNATION ARTICLE</th>
-                <th style="width: 10%;" class="text-center">QTÉ</th>
+                <th style="width: 10%;" class="text-center">QTÉ @if (isset($strategy))
+                        ({{ $strategy->getAvailableUnits()[0] }})
+                    @endif
+                </th>
                 <th style="width: 15%;" class="text-right">P.U.</th>
                 <th style="width: 15%;" class="text-right">TOTAL</th>
             </tr>

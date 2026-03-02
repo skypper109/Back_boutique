@@ -7,6 +7,7 @@ use App\Models\Boutique;
 use App\Models\User;
 use App\Models\Vente;
 use App\Models\DetailVente;
+use App\Models\Nature;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -41,8 +42,9 @@ class SuperAdminController extends Controller
 
     public function boutiquesIndex()
     {
-        $boutiques = Boutique::with('creator')->get();
-        return view('admin.boutiques.index', compact('boutiques'));
+        $boutiques = Boutique::with(['creator', 'nature'])->get();
+        $natures = Nature::where('is_active', true)->get();
+        return view('admin.boutiques.index', compact('boutiques', 'natures'));
     }
 
     public function boutiqueShow(Boutique $boutique)
@@ -75,14 +77,16 @@ class SuperAdminController extends Controller
             'nom' => 'required|string|max:255',
             'adresse' => 'required|string|max:255',
             'telephone' => 'required|string|max:20',
+            'nom_admin' => 'required|string|max:255',
             'email_admin' => 'required|email|unique:users,email',
             'password_admin' => 'required|string|min:6',
+            'nature_id' => 'required|exists:natures,id',
         ]);
 
         DB::transaction(function () use ($request) {
 
             $user = User::create([
-                'name' => 'Admin ' . $request->nom,
+                'name' => $request->nom_admin,
                 'email' => $request->email_admin,
                 'password' => Hash::make($request->password_admin),
                 'role' => 'admin',
@@ -97,7 +101,8 @@ class SuperAdminController extends Controller
                 'telephone' => $request->telephone,
                 'is_active' => true,
                 'user_id' =>$user->id,
-                'email' => $request->email_admin
+                'email' => $request->email_admin,
+                'nature_id' => $request->nature_id
             ]);
             $user->boutique_id = $boutique->id;
             $user->save();

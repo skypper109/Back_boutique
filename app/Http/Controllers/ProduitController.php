@@ -455,6 +455,7 @@ class ProduitController extends Controller
             'reference' => 'nullable|string',
             'date_achat' => 'nullable|date',
             'date_fin_garantie' => 'nullable|date',
+            'config' => 'nullable|string', // Expecting JSON string from FormData
         ]);
 
         $chemin = null;
@@ -474,6 +475,7 @@ class ProduitController extends Controller
             'image' => $imagePath,
             'prix_master' => $request->input('prix_master'),
             'prix_detail' => $request->input('prix_detail'),
+            'config' => json_decode($request->input('config'), true),
         ]);
 
         $produitId = $produit->id;
@@ -521,6 +523,7 @@ class ProduitController extends Controller
             'prix_detail' => 'nullable|numeric',
             'prix_master' => 'nullable|numeric',
             'quantite' => 'nullable|integer',
+            'config' => 'nullable|string',
             // Accepter aussi camelCase au cas où
             'prixVente' => 'nullable|numeric',
             'prixAchat' => 'nullable|numeric',
@@ -533,6 +536,7 @@ class ProduitController extends Controller
             'categorie_id' => $request->input('categorie_id', $produit->categorie_id),
             'prix_detail' => $request->input('prix_detail', $produit->prix_detail),
             'prix_master' => $request->input('prix_master', $produit->prix_master),
+            'config' => $request->has('config') ? json_decode($request->input('config'), true) : $produit->config,
         ];
 
         if ($request->hasFile('image')) {

@@ -134,5 +134,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
         Route::post('/boutiques/store-with-manager', [BoutiqueController::class, 'storeWithManager'])->middleware('role:admin');
         Route::apiResource('boutiques', BoutiqueController::class);
+        
+        // Natures Routes
+        Route::apiResource('natures', \App\Http\Controllers\NatureController::class);
 
     });

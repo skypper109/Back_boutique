@@ -16,7 +16,7 @@ class BoutiqueController extends Controller
     public function allStats()
     {
         $user = Auth::user();
-        $boutiques = Boutique::where('user_id', $user->id)->get();
+        $boutiques = Boutique::with('nature')->where('user_id', $user->id)->get();
         $reports = [];
 
         foreach ($boutiques as $b) {
@@ -35,7 +35,7 @@ class BoutiqueController extends Controller
 
     public function stats(string $id)
     {
-        $boutique = Boutique::findOrFail($id);
+        $boutique = Boutique::with('nature')->findOrFail($id);
 
         $salesCount = Vente::where('boutique_id', $id)->whereIn('statut', ['validee', 'payee', 'credit'])->count();
         $totalRevenue = Vente::where('boutique_id', $id)->whereIn('statut', ['validee', 'payee', 'credit'])->sum('montant_total');
@@ -76,7 +76,7 @@ class BoutiqueController extends Controller
 
         // Pour les autres roles, peut-être filtrer ?
         // Mais selon la demande, l'admin doit pouvoir switcher.
-        return response()->json(Boutique::where('user_id', $user->id)->get(), 200);
+        return response()->json(Boutique::with('nature')->where('user_id', $user->id)->get(), 200);
     }
 
     /**
@@ -102,6 +102,7 @@ class BoutiqueController extends Controller
                 'couleur_secondaire' => 'nullable|string',
                 'devise' => 'nullable|string',
                 'format_facture' => 'nullable|string',
+                'nature_id' => 'required|exists:natures,id',
             ]);
 
             $user = Auth::user();
@@ -156,6 +157,7 @@ class BoutiqueController extends Controller
                     'boutique.couleur_secondaire' => 'nullable|string',
                     'boutique.devise' => 'nullable|string',
                     'boutique.format_facture' => 'nullable|string',
+                    'boutique.nature_id' => 'required|exists:natures,id',
                     
                     'manager.name' => 'required|string',
                     'manager.email' => 'required|string|email|unique:users,email',
@@ -207,7 +209,7 @@ class BoutiqueController extends Controller
      */
     public function show(string $id)
     {
-        return response()->json(Boutique::findOrFail($id), 200);
+        return response()->json(Boutique::with('nature')->findOrFail($id), 200);
     }
 
     /**
@@ -234,6 +236,7 @@ class BoutiqueController extends Controller
             'couleur_secondaire' => 'nullable|string',
             'devise' => 'nullable|string',
             'format_facture' => 'nullable|string',
+            'nature_id' => 'required|exists:natures,id',
         ]);
 
         $boutique->update($fields);

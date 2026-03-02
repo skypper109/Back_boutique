@@ -26,8 +26,14 @@ class Boutique extends Model
         'couleur_principale',
         'couleur_secondaire',
         'devise',
-        'format_facture'
+        'format_facture',
+        'nature_id'
     ];
+
+    public function nature()
+    {
+        return $this->belongsTo(Nature::class);
+    }
 
     public function creator()
     {

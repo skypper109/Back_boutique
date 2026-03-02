@@ -779,9 +779,9 @@ class VenteController extends Controller
                 $vente->montant_restant = ($vente->type_paiement === 'credit')
                     ? ($request->montant_total - $vente->montant_avance)
                     : 0;
-            }
+            } 
 
-            $vente->date_vente = $request->date ?? now()->format('Y-m-d');
+            $vente->date_vente = $request->input('date', now()->format('Y-m-d'));
             $vente->save();
 
             $sumLineRemises = 0;

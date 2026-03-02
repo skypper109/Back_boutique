@@ -218,7 +218,6 @@ class DailyReportController extends Controller
 
         $ventes = Vente::with(['detailVentes.produit', 'client', 'user'])
             ->where('boutique_id', $boutiqueId)
-            ->where('statut','annulee')
             ->where('statut', 'payee')
             ->whereDate('date_vente', $date)
             ->get();

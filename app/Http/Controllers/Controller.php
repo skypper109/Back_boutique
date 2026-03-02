@@ -44,18 +44,4 @@ abstract class Controller
             ? (int) $headerBoutiqueId 
             : $user->boutique_id;
     }
-
-    /**
-     * Obtenir la stratégie de nature pour la boutique actuelle.
-     */
-    protected function getNatureStrategy(): \App\Contracts\ShopNatureStrategy
-    {
-        $boutique = $this->getActiveBoutique();
-        if (!$boutique) {
-            // Fallback to default if no boutique context
-            return \App\Services\NatureStrategyFactory::makeBySlug('default');
-        }
-
-        return \App\Services\NatureStrategyFactory::make($boutique);
-    }
 }

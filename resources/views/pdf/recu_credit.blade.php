@@ -44,8 +44,8 @@
         }
 
         .doc-type {
-            background-color: #000;
-            color: #fff;
+            background-color: #b4b4b4;
+            color: #000000;
             padding: 10px;
             text-align: center;
             font-size: 16pt;
@@ -73,8 +73,8 @@
         }
 
         .balance-label {
-            background-color: #000;
-            color: #fff;
+            background-color: #a1a1a1ea;
+            color: #000000;
             font-weight: bold;
             text-align: right;
             padding: 10px;
@@ -86,6 +86,20 @@
             font-weight: bold;
             text-align: right;
             padding: 10px;
+        }
+
+        @page {
+            margin-bottom: 40mm;
+        }
+
+        .pdf-footer {
+            position: fixed;
+            bottom: 0px;
+            left: 0;
+            right: 0;
+            width: 100%;
+            margin: 0 !important;
+            padding: 0 !important;
         }
     </style>
 @endsection
@@ -211,22 +225,29 @@
         </table>
     </div>
 
-    <div style="clear: both; margin-bottom: 0px;">
-        <table style="width: 100%; border: none;">
-            <tr>
-                <td style="width: 45%; text-align: center; vertical-align: top; height: 20px;">
-                    <div style="font-size: 8pt; font-weight: bold; text-transform: uppercase;">Cachet Boutique & Date</div>
-                </td>
-                <td style="width: 10%; border: none;"></td>
-                <td style="width: 45%; text-align: center; vertical-align: top;">
-                    <div style="font-size: 8pt; font-weight: bold; text-transform: uppercase;">Signature Client</div>
-                </td>
-            </tr>
-        </table>
-    </div>
+    <div class="pdf-footer">
+        <div style="clear: both; margin-bottom: 0px;">
+            <table style="width: 100%; border: none;">
+                <tr>
+                    <td style="width: 45%; text-align: center; vertical-align: top; height: 20px;">
+                        <div style="font-size: 8pt; font-weight: bold; text-transform: uppercase; padding-bottom: 20px;">
+                            Cachet Boutique &
+                            Date
+                        </div>
+                    </td>
+                    <td style="width: 10%; border: none;"></td>
+                    <td style="width: 45%; text-align: center; vertical-align: top;">
+                        <div style="font-size: 8pt; font-weight: bold; text-transform: uppercase;">
+                            Signature Client
+                        </div>
+                    </td>
+                </tr>
+            </table>
+        </div>
 
-    <div
-        style="margin-top: 0px; text-align: center; font-size: 8pt; color: #666; font-style: italic; border-top: 1px solid #ccc; padding-top: 10px;">
-        {{ $boutique->footer_recu ?? 'Conservez ce reçu comme preuve de paiement de votre créance.' }}
+        <div
+            style="margin-top: 0px; text-align: center; font-size: 8pt; color: #666; font-style: italic; border-top: 1px solid #ccc; padding-top: 10px;">
+            {{ $boutique->footer_recu ?? 'Conservez ce reçu comme preuve de paiement de votre créance.' }}
+        </div>
     </div>
 @endsection

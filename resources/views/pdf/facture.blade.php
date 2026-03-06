@@ -44,8 +44,8 @@
         }
 
         .doc-type {
-            background-color: #000;
-            color: #fff;
+            background-color: #757575;
+            color: #0c0c0c;
             padding: 10px;
             text-align: center;
             font-size: 18pt;
@@ -82,6 +82,20 @@
         .totals-table td {
             border: 1px solid #666;
             padding: 8px;
+        }
+
+        @page {
+            margin-bottom: 50mm;
+        }
+
+        .pdf-footer {
+            position: fixed;
+            bottom: 0px;
+            left: 0;
+            right: 0;
+            width: 100%;
+            margin: 0 !important;
+            padding: 0 !important;
         }
     </style>
 @endsection
@@ -156,16 +170,16 @@
         <table class="totals-table">
             @if ($vente->remise > 0)
                 <tr>
-                    <td class="bg-grey font-bold">MONTANT TOTAL</td>
+                    <td class=" font-bold">MONTANT TOTAL</td>
                     <td class="text-right">{{ number_format($vente->montant_total + $vente->remise, 0, ',', ' ') }}</td>
                 </tr>
                 <tr>
-                    <td class="bg-grey font-bold">REMISE (-)</td>
+                    <td class=" font-bold">REMISE (-)</td>
                     <td class="text-right text-red" style="color: red;">
                         {{ number_format($vente->remise, 0, ',', ' ') }}</td>
                 </tr>
             @endif
-            <tr style="background-color: #000; color: #fff;">
+            <tr style="color: #000;">
                 <td class="font-bold">NET À PAYER</td>
                 <td class="text-right font-bold" style="font-size: 12pt;">
                     {{ number_format($vente->montant_total ?? 0, 0, ',', ' ') }}
@@ -179,23 +193,28 @@
         </p>
     </div>
 
-    <div style="margin-top: 150px;">
-        <table style="width: 100%; border: none;">
-            <tr>
-                <td style="width: 50%; border: 1px dashed #ccc; padding: 20px; text-align: center; vertical-align: top;">
-                    <div style="font-size: 8pt; font-weight: bold; text-transform: uppercase; margin-bottom: 50px;">Cachet &
-                        Signature Boutique</div>
-                </td>
-                <td style="width: 50%; border: 1px dashed #ccc; padding: 20px; text-align: center; vertical-align: top;">
-                    <div style="font-size: 8pt; font-weight: bold; text-transform: uppercase; margin-bottom: 50px;">
-                        Signature Client</div>
-                </td>
-            </tr>
-        </table>
-    </div>
+    <div class="pdf-footer">
+        <div>
+            <table style="width: 100%; border: none;">
+                <tr>
+                    <td
+                        style="width: 50%; border: 1px dashed #ccc; padding: 20px; text-align: center; vertical-align: top;">
+                        <div style="font-size: 8pt; font-weight: bold; text-transform: uppercase; margin-bottom: 50px;">
+                            Cachet &
+                            Signature Boutique</div>
+                    </td>
+                    <td
+                        style="width: 50%; border: 1px dashed #ccc; padding: 20px; text-align: center; vertical-align: top;">
+                        <div style="font-size: 8pt; font-weight: bold; text-transform: uppercase; margin-bottom: 50px;">
+                            Signature Client</div>
+                    </td>
+                </tr>
+            </table>
+        </div>
 
-    <div
-        style="margin-top: 30px; text-align: center; font-size: 8pt; color: #666; border-top: 1px solid #ccc; padding-top: 10px;">
-        {{ $boutique->footer_facture ?? 'Merci de votre confiance. Les marchandises vendues ne sont ni reprises ni échangées apres 48h.' }}
+        <div
+            style="margin-top: 30px; text-align: center; font-size: 8pt; color: #666; border-top: 1px solid #ccc; padding-top: 10px;">
+            {{ $boutique->footer_facture ?? 'Merci de votre confiance. Les marchandises vendues ne sont ni reprises ni échangées apres 48h.' }}
+        </div>
     </div>
 @endsection

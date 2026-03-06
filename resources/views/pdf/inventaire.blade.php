@@ -67,15 +67,16 @@
         }
 
         .signature-section {
-            margin-top: 50px;
+            /* margin-top: 50px; */
             display: table;
             width: 100%;
+            /* margin-right: 40px; */
         }
 
         .signature-box {
             display: table-cell;
             width: 33.33%;
-            border: 1px solid #aaa;
+            border-right: 1px dashed #aaa;
             padding: 10px;
             text-align: center;
             height: 80px;
@@ -96,6 +97,20 @@
             color: #666;
             border-top: 1px dotted #ccc;
             padding-top: 10px;
+        }
+
+        @page {
+            margin-bottom: 50mm;
+        }
+
+        .pdf-footer {
+            position: fixed;
+            bottom: 0px;
+            left: 0;
+            right: 0;
+            width: 100%;
+            /* margin: 0 !important; */
+            /* padding: 0 !important; */
         }
     </style>
 @endsection
@@ -170,7 +185,7 @@
             @endforeach
         </tbody>
         <tfoot>
-            <tr class="bg-grey">
+            <tr>
                 <td colspan="4" class="text-right font-bold">RÉSUMÉ DU FLUX DE STOCK</td>
                 <td class="text-center font-bold {{ $stats['netMouvement'] >= 0 ? 'text-green' : 'text-red' }}">
                     {{ $stats['netMouvement'] > 0 ? '+' : '' }}{{ $stats['netMouvement'] }}
@@ -183,22 +198,24 @@
         </tfoot>
     </table>
 
-    <div class="signature-section">
-        <div class="signature-box">
-            <div class="signature-label">Gestionnaire de Stock</div>
-            <div style="font-size: 7pt; color: #999; margin-top: 30px;">Visa et Date</div>
+    <div class="pdf-footer">
+        <div class="signature-section" style="margin-top: 0px;">
+            <div class="signature-box">
+                <div class="signature-label">Gestionnaire de Stock</div>
+                <div style="font-size: 7pt; color: #999; margin-top: 30px;">...................</div>
+            </div>
+            <div class="signature-box">
+                <div class="signature-label">Audit Interne</div>
+                <div style="font-size: 7pt; color: #999; margin-top: 30px;">...................</div>
+            </div>
+            <div class="signature-box">
+                <div class="signature-label">Direction</div>
+                <div style="font-size: 7pt; color: #999; margin-top: 30px;">....................</div>
+            </div>
         </div>
-        <div class="signature-box">
-            <div class="signature-label">Audit Interne</div>
-            <div style="font-size: 7pt; color: #999; margin-top: 30px;">Validation et Cachet</div>
-        </div>
-        <div class="signature-box">
-            <div class="signature-label">Direction</div>
-            <div style="font-size: 7pt; color: #999; margin-top: 30px;">Approbation</div>
-        </div>
-    </div>
 
-    <div class="footer">
-        Document d'audit officiel généré par Ma Boutique le {{ date('d/m/Y à H:i') }} - Page 1/1
+        <div class="footer">
+            Document d'audit officiel généré par Ma Boutique le {{ date('d/m/Y à H:i') }} - Page 1/1
+        </div>
     </div>
 @endsection

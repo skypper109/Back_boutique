@@ -44,8 +44,8 @@
         }
 
         .doc-type {
-            background-color: #000;
-            color: #fff;
+            background-color: #757575;
+            color: #0c0c0c;
             padding: 10px;
             text-align: center;
             font-size: 18pt;
@@ -64,50 +64,92 @@
             text-align: center;
         }
 
+        .bg-grey {
+            background-color: #f9f9f9;
+        }
+
         .font-bold {
             font-weight: bold;
+        }
+
+        .totals-table {
+            width: 250px;
+            float: right;
+            margin-top: 10px;
+            border-collapse: collapse;
+        }
+
+        .totals-table td {
+            border: 1px solid #666;
+            padding: 8px;
+        }
+
+        @page {
+            margin-bottom: 50mm;
+        }
+
+        .pdf-footer {
+            position: fixed;
+            bottom: 0px;
+            left: 0;
+            right: 0;
+            width: 100%;
+            margin: 0 !important;
+            padding: 0 !important;
         }
     </style>
 @endsection
 
 @section('content')
-    <div class="document-meta">
-        <div class="document-number">N° {{ str_pad($vente->id, 6, '0', STR_PAD_LEFT) }}/{{ date('Y') }}</div>
-        <div class="document-date">Le {{ \Carbon\Carbon::parse($vente->date_vente)->format('d/m/Y') }}</div>
-    </div>
-    </div>
+    <div class="header-box">
+        <table style="width: 100%; border: none;">
+            <tr>
+                <td style="width: 60%; border: none; vertical-align: top;">
+                    <div class="company-name">{{ $boutique->nom ?? 'MA BOUTIQUE' }}</div>
+                    <div style="font-size: 9pt;">
+                        {{ $boutique->adresse ?? 'Adresse non spécifiée' }}<br>
+                        Tél: {{ $boutique->telephone ?? '---' }}<br>
+                        Email: {{ $boutique->email ?? '---' }}
+                    </div>
+                </td>
+                <td style="width: 40%; border: none; vertical-align: top;">
+                    <div class="doc-type">BORDEREAU</div>
+                    <div style="margin-top: 10px; text-align: right; font-weight: bold;">
+                        N° #{{ str_pad($vente->id, 6, '0', STR_PAD_LEFT) }}<br>
+                        Date: {{ \Carbon\Carbon::parse($vente->date_vente)->format('d/m/Y HH:mm') }}
+                    </div>
+                </td>
+            </tr>
+        </table>
     </div>
 
-    <div style="display: flex; justify-content: space-between;" class="client-section">
-        <div style="flex: 1;">
-            <div class="section-label">Destinataire</div>
-            <div class="client-name">{{ $vente->client->nom ?? 'Client de Passage' }}</div>
-        </div>
-        <div style="text-align: right;">
-            <div class="section-label">Contact Client</div>
-            <div style="font-size: 11pt; font-weight: 600; color: #2c3e50; margin-top: 5px;">
+    <table class="excel-table">
+        <tr>
+            <td style="background-color: #f2f2f2; font-weight: bold; width: 15%;">CLIENT</td>
+            <td>{{ $vente->client->nom != 'ANONYME' ? $vente->client->nom : 'CLIENT DE PASSAGE' }}</td>
+            <td style="background-color: #f2f2f2; font-weight: bold; width: 15%;">CONTACT</td>
+            <td class="text-center font-bold">
                 {{ $vente->client->telephone ?? 'N/A' }}
-            </div>
-        </div>
-    </div>
+            </td>
+        </tr>
+    </table>
 
-    <table class="items-table">
+    <table class="excel-table zebra">
         <thead>
             <tr>
-                <th style="width: 50%;">Désignation</th>
-                <th style="width: 15%; text-align: center;">Qté</th>
-                <th style="width: 17.5%; text-align: right;">Prix Unit.</th>
-                <th style="width: 17.5%; text-align: right;">Montant</th>
+                <th style="width: 10%;">REF</th>
+                <th style="width: 50%;">DÉSIGNATION ARTICLE</th>
+                <th style="width: 10%;" class="text-center">QTÉ</th>
+                <th style="width: 15%;" class="text-right">P.U.</th>
+                <th style="width: 15%;" class="text-right">TOTAL</th>
             </tr>
         </thead>
         <tbody>
             @foreach ($vente->detailVentes as $detail)
                 <tr>
-                    <td>
-                        <div class="item-name">{{ $detail->produit->nom }}</div>
-                        <div class="item-code">Code Produit: #P-{{ str_pad($detail->produit->id, 6, '0', STR_PAD_LEFT) }}
-                        </div>
-                    </td>
+                    <td class="text-center">
+                        {{ str_pad($detail->produit->reference ?? $detail->produit->id, 4, '0', STR_PAD_LEFT) }}</td>
+                    <td>{{ $detail->produit->nom }}</td>
                     <td class="text-center font-bold">{{ $detail->quantite }}</td>
                     <td class="text-right">{{ number_format($detail->prix_unitaire, 0, ',', ' ') }}</td>
                     <td class="text-right font-bold">{{ number_format($detail->montant_total, 0, ',', ' ') }}</td>
@@ -116,49 +158,44 @@
         </tbody>
     </table>
 
-    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-        <div style="flex: 1; margin-right: 40px;">
-            <div class="notes-section">
-                <strong style="display: block; margin-bottom: 8px; color: #2c3e50;">Note Importante</strong>
-                {{ $boutique->footer_bordereau ?? 'Ce document reste la propriété de la boutique jusqu\'au règlement intégral. Tout défaut de paiement peut entraîner des poursuites judiciaires.' }}
-            </div>
-        </div>
-        <div style="width: 280px;">
-            <div class="summary-section">
-                <div class="summary-row">
-                    <span class="summary-label">Montant Total</span>
-                    <span class="summary-value">{{ number_format($vente->montant_total, 0, ',', ' ') }}</span>
-                </div>
-                @if ($vente->type_paiement !== 'proforma' && $vente->montant_restant < $vente->montant_total)
-                    <div class="summary-row payment-row">
-                        <span class="summary-label">Montant Réglé</span>
-                        <span class="summary-value">-
-                            {{ number_format($vente->montant_total - $vente->montant_restant, 0, ',', ' ') }}</span>
-                    </div>
-                @endif
-                <div class="total-row">
-                    <div class="total-label">
-                        {{ $vente->type_paiement === 'proforma' ? 'Somme à Payer' : 'Reste à Payer' }}
-                    </div>
-                    <div class="total-amount">
-                        {{ number_format($vente->montant_restant, 0, ',', ' ') }}
-                        <span class="currency">{{ $boutique->devise ?? 'CFA' }}</span>
-                    </div>
-                </div>
-            </div>
+    <div style="clear: both;">
+        <table class="totals-table">
+            <tr>
+                <td class="font-bold">MONTANT TOTAL</td>
+                <td class="text-right font-bold" style="font-size: 12pt;">
+                    {{ number_format($vente->montant_total ?? 0, 0, ',', ' ') }}
+                    <small style="font-size: 8pt;">{{ $boutique->devise ?? 'CFA' }}</small>
+                </td>
+            </tr>
+        </table>
+
+        <div style="width: 400px; margin-top: 10px; font-size: 8pt; color: #555;">
+            <strong style="color: #000;">Note Importante:</strong><br>
+            {{ $boutique->footer_bordereau ?? 'Ce document reste la propriété de la boutique jusqu\'au règlement intégral.' }}
         </div>
     </div>
 
-    <div class="signature-section">
-        <div class="signature-box">
-            <div class="signature-label">Signature Autorisée</div>
+    <div class="pdf-footer">
+        <div>
+            <table style="width: 100%; border: none;">
+                <tr>
+                    <td
+                        style="width: 50%; border: 1px dashed #ccc; padding: 20px; text-align: center; vertical-align: top;">
+                        <div style="font-size: 8pt; font-weight: bold; text-transform: uppercase; margin-bottom: 50px;">
+                            Signature Autorisée</div>
+                    </td>
+                    <td
+                        style="width: 50%; border: 1px dashed #ccc; padding: 20px; text-align: center; vertical-align: top;">
+                        <div style="font-size: 8pt; font-weight: bold; text-transform: uppercase; margin-bottom: 50px;">
+                            Signature du Client (Accusé)</div>
+                    </td>
+                </tr>
+            </table>
         </div>
-        <div class="signature-box">
-            <div class="signature-label">Signature du Client (Accusé)</div>
-        </div>
-    </div>
 
-    <div class="footer-text">
-        Document Commercial Officiel • {{ strtoupper($boutique->nom ?? 'Ma Boutique') }}
+        <div
+            style="margin-top: 30px; text-align: center; font-size: 8pt; color: #666; border-top: 1px solid #ccc; padding-top: 10px;">
+            Document Commercial Officiel • {{ strtoupper($boutique->nom ?? 'Ma Boutique') }}
+        </div>
     </div>
 @endsection

@@ -95,6 +95,20 @@
         .bg-grey {
             background-color: #eee;
         }
+
+        @page {
+            margin-bottom: 55mm;
+        }
+
+        .pdf-footer {
+            position: fixed;
+            bottom: 0px;
+            left: 0;
+            right: 0;
+            width: 100%;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
     </style>
 @endsection
 
@@ -281,7 +295,7 @@
             <td class="text-right font-bold text-red" style="color: #c00;">-
                 {{ number_format($totaux['depenses'], 0, ',', ' ') }} {{ $boutique->devise }}</td>
         </tr>
-        <tr style="background-color: #000; color: #fff;">
+        <tr style="background-color: #00000027; color: #14411f;">
             <td class="font-bold" style="font-size: 11pt;">BÉNÉFICE NET DE LA JOURNÉE (A - B)</td>
             <td class="text-right font-bold" style="font-size: 14pt;">
                 {{ number_format($totaux['benefice_net'], 0, ',', ' ') }}
@@ -312,24 +326,28 @@
         </tr>
     </table>
 
-    <div style="margin-top: 50px;">
-        <table style="width: 100%; border: none;">
-            <tr>
-                <td style="width: 50%; border: 2px solid #000; padding: 15px; height: 100px; vertical-align: top;">
-                    <div style="font-size: 8pt; font-weight: bold; text-transform: uppercase;">Visa du Gérant / Caissier :
-                    </div>
-                    <div style="margin-top: 10px; font-size: 7pt; font-style: italic;">{{ $boutique->nom }}</div>
-                </td>
-                <td style="width: 50%; border: 2px solid #000; padding: 15px; height: 100px; vertical-align: top;">
-                    <div style="font-size: 8pt; font-weight: bold; text-transform: uppercase;">Visa de la Direction / Audit
-                        :</div>
-                </td>
-            </tr>
-        </table>
-    </div>
+    <div class="pdf-footer">
+        <div>
+            <table style="width: 100%; border: none;">
+                <tr>
+                    <td style="width: 50%; border: 1px solid #000; padding: 15px; height: 100px; vertical-align: top;">
+                        <div style="font-size: 8pt; font-weight: bold; text-transform: uppercase;">Visa du Gérant /
+                            Caissier :
+                        </div>
+                        <div style="margin-top: 10px; font-size: 7pt; font-style: italic;">{{ $boutique->nom }}</div>
+                    </td>
+                    <td style="width: 50%; border: 1px solid #000; padding: 15px; height: 100px; vertical-align: top;">
+                        <div style="font-size: 8pt; font-weight: bold; text-transform: uppercase;">Visa de la Direction /
+                            Audit
+                            :</div>
+                    </td>
+                </tr>
+            </table>
+        </div>
 
-    <p
-        style="text-align: center; font-size: 6pt; color: #666; text-transform: uppercase; letter-spacing: 0.3em; margin-top: 15px;">
-        RAPPORT GÉNÉRÉ AUTOMATIQUEMENT LE {{ date('d/m/Y à H:i') }}
-    </p>
+        <p
+            style="text-align: center; font-size: 6pt; color: #666; text-transform: uppercase; letter-spacing: 0.3em; margin-top: 15px;">
+            RAPPORT GÉNÉRÉ AUTOMATIQUEMENT LE {{ date('d/m/Y à H:i') }}
+        </p>
+    </div>
 @endsection

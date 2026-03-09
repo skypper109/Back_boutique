@@ -44,7 +44,7 @@ L'application est pensée pour répondre aux défis des commerçants modernes :
 - **Génération PDF** : Laravel DomPDF
 - **Intégrations** : API WhatsApp pour les notifications.
 
-##  Installation Rapide
+## Installation Rapide
 
 1. **Cloner le projet**
 

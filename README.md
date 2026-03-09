@@ -1,67 +1,84 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Ma Boutique - Ensemble, plus loin 🚀
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+**Ma Boutique** est une solution backend robuste et évolutive conçue pour la gestion complète de boutiques et de réseaux de commerces. Développée avec Laravel, elle offre une API puissante pour centraliser les opérations commerciales, de la vente à la comptabilité analytique.
 
-## About Laravel
+## 🌟 Concept
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+L'application est pensée pour répondre aux défis des commerçants modernes :
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+- **Centralisation** : Gérez plusieurs boutiques depuis une interface unique.
+- **Transparence** : Suivi en temps réel des stocks, des ventes et des flux financiers.
+- **Accessibilité** : Automatisation des rapports et notifications pour rester informé, où que vous soyez.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## ✨ Fonctionnalités Clés
 
-## Learning Laravel
+### 📦 Gestion des Stocks & Produits
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+- **Inventaire Dynamique** : Suivi précis des quantités disponibles par boutique.
+- **Réapprovisionnements** : Historique des entrées en stock et alertes de rupture.
+- **Import/Export** : Gestion simplifiée des catalogues via CSV.
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+### 💰 Ventes & Facturation
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+- **Ventes Omnicanales** : Gestion des ventes directes et proformas.
+- **Facturation PDF** : Génération automatique de factures, bordereaux et devis proforma professionnels.
+- **Historique Détaillé** : Consultation des ventes passées avec filtres avancés (jour, mois, année).
 
-## Laravel Sponsors
+### 💳 Crédits & Paiements Clients
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+- **Suivi des Dettes** : Gestion rigoureuse des ventes à crédit.
+- **Paiements Partiels** : Enregistrement des paiements et mise à jour automatique du solde client.
+- **Relevés de Compte** : Génération d'historiques de paiements pour chaque client.
 
-### Premium Partners
+### Analyse & Reporting
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[WebReinvent](https://webreinvent.com/)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Jump24](https://jump24.co.uk)**
-- **[Redberry](https://redberry.international/laravel/)**
-- **[Active Logic](https://activelogic.com)**
-- **[byte5](https://byte5.de)**
-- **[OP.GG](https://op.gg)**
+- **Tableau de Bord** : Indicateurs de performance (CA, marge, top ventes).
+- **Dépenses & Frais** : Suivi des charges opérationnelles pour calculer la rentabilité réelle.
+- **Rapports Quotidiens (Daily Reports)** : Génération et envoi automatique de rapports de fin de journée via **WhatsApp** et **Email**.
 
-## Contributing
+## 🛠 Stack Technique
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+- **Framework** : Laravel 10 (PHP 8.2+)
+- **Base de données** : MySQL
+- **Authentification** : Laravel Sanctum
+- **Génération PDF** : Laravel DomPDF
+- **Intégrations** : API WhatsApp pour les notifications.
 
-## Code of Conduct
+##  Installation Rapide
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+1. **Cloner le projet**
 
-## Security Vulnerabilities
+   ```bash
+   git clone https://github.com/skypper109/Back_boutique.git
+   cd Back_boutique
+   ```
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+2. **Installer les dépendances**
 
-## License
+   ```bash
+   composer install
+   ```
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
-# Back_boutique
+3. **Configuration**
+
+   ```bash
+   cp .env.example .env
+   php artisan key:generate
+   ```
+
+   *Note : Configurez votre base de données dans le fichier `.env`.*
+
+4. **Migrations & Seeders**
+
+   ```bash
+   php artisan migrate --seed
+   ```
+
+5. **Lancer le serveur**
+
+   ```bash
+   php artisan serve
+   ```
+
+---
+© 2026 MalCom - Tous droits réservés.

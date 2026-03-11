@@ -191,27 +191,31 @@
             modal.style.display = 'flex';
         }
     </script>
+    <style>
+        @media (max-width: 768px) {
+            .dashboard-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 15px;
+            }
 
-    @media (max-width: 768px) {
-    .dashboard-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 15px;
-    }
-    .header-actions {
-    width: 100%;
-    }
-    .header-actions .btn {
-    width: 100%;
-    justify-content: center;
-    }
-    .table-wrapper {
-    overflow-x: auto;
-    }
-    .modal-content {
-    width: 95%;
-    padding: 24px;
-    }
-    }
+            .header-actions {
+                width: 100%;
+            }
+
+            .header-actions .btn {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .table-wrapper {
+                overflow-x: auto;
+            }
+
+            .modal-content {
+                width: 95%;
+                padding: 24px;
+            }
+        }
     </style>
 @endsection

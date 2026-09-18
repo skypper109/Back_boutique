@@ -16,16 +16,41 @@ class BoutiqueController extends Controller
     public function allStats()
     {
         $user = Auth::user();
-        $boutiques = Boutique::with('nature')->where('user_id', $user->id)->get();
+        if (in_array($user->role, ['admin', 'admin1'])) {
+            $boutiques = Boutique::with('nature')
+                ->where(function ($q) use ($user) {
+                    $q->where('user_id', $user->id)
+                      ->orWhere('id', $user->boutique_id);
+                })->get();
+            if ($boutiques->isEmpty()) {
+                $boutiques = Boutique::with('nature')->get();
+            }
+        } else {
+            $boutiques = Boutique::with('nature')
+                ->where('id', $user->boutique_id)
+                ->get();
+        }
+
         $reports = [];
 
         foreach ($boutiques as $b) {
+            $salesQuery = \App\Models\Vente::where('boutique_id', $b->id)
+                ->whereIn('statut', ['validee', 'payee', 'credit', 'terminee']);
+            $revenue = (float)$salesQuery->sum('montant_total');
+            $salesCount = $salesQuery->count();
+            $usersCount = \App\Models\User::where('boutique_id', $b->id)->count();
+
             $reports[] = [
                 'id' => $b->id,
                 'nom' => $b->nom,
-                'revenue' => \App\Models\Vente::where('boutique_id', $b->id)->whereIn('statut', ['validee', 'payee', 'credit'])->sum('montant_total'),
-                'sales_count' => \App\Models\Vente::where('boutique_id', $b->id)->whereIn('statut', ['validee', 'payee', 'credit'])->count(),
-                'users_count' => \App\Models\User::where('boutique_id', $b->id)->count(),
+                'nature' => $b->nature ? [
+                    'id' => $b->nature->id,
+                    'name' => $b->nature->name,
+                    'slug' => $b->nature->slug
+                ] : null,
+                'revenue' => $revenue,
+                'sales_count' => $salesCount,
+                'users_count' => $usersCount,
                 'is_active' => $b->is_active
             ];
         }
@@ -37,8 +62,8 @@ class BoutiqueController extends Controller
     {
         $boutique = Boutique::with('nature')->findOrFail($id);
 
-        $salesCount = Vente::where('boutique_id', $id)->whereIn('statut', ['validee', 'payee', 'credit'])->count();
-        $totalRevenue = Vente::where('boutique_id', $id)->whereIn('statut', ['validee', 'payee', 'credit'])->sum('montant_total');
+        $salesCount = Vente::where('boutique_id', $id)->whereIn('statut', ['validee', 'payee', 'credit', 'terminee'])->count();
+        $totalRevenue = (float)Vente::where('boutique_id', $id)->whereIn('statut', ['validee', 'payee', 'credit', 'terminee'])->sum('montant_total');
         $usersCount = User::where('boutique_id', $id)->count();
 
         $topProducts = DetailVente::with('produit')
@@ -68,15 +93,19 @@ class BoutiqueController extends Controller
     public function index()
     {
         $user = Auth::user();
-        // if ($user->role === 'admin') {
-        //     // Un admin voit toutes les boutiques qu'il a créées ou toutes les boutiques s'il est super-admin
-        //     // Pour l'instant, on retourne tout s'il est admin
-        //     return response()->json(Boutique::all(), 200);
-        // }
+        if (in_array($user->role, ['admin', 'admin1'])) {
+            $boutiques = Boutique::with('nature')
+                ->where(function ($q) use ($user) {
+                    $q->where('user_id', $user->id)
+                      ->orWhere('id', $user->boutique_id);
+                })->get();
+            if ($boutiques->isEmpty()) {
+                $boutiques = Boutique::with('nature')->get();
+            }
+            return response()->json($boutiques, 200);
+        }
 
-        // Pour les autres roles, peut-être filtrer ?
-        // Mais selon la demande, l'admin doit pouvoir switcher.
-        return response()->json(Boutique::with('nature')->where('user_id', $user->id)->get(), 200);
+        return response()->json(Boutique::with('nature')->where('id', $user->boutique_id)->get(), 200);
     }
 
     /**

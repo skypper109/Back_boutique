@@ -12,11 +12,16 @@ use App\Http\Controllers\CategorieController;
 use App\Http\Controllers\BoutiqueController;
 use App\Http\Controllers\AnneeController;
 use App\Http\Controllers\UserStatusController;
+use App\Http\Controllers\LicenceController;
 use App\Http\Controllers\{CreditController,ExpenseController};
 
 // Auth Routes
 Route::post('/login', [AuthController::class, 'login'])->name('login');
 Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
+
+// Licences & Abonnements Routes
+Route::post('/licences/activer', [LicenceController::class, 'activer']);
+Route::get('/licences/statut/{boutique_id}', [LicenceController::class, 'statut']);
 
 // User and Boutique Status Check Routes (must be authenticated)
 Route::middleware('auth:sanctum')->group(function () {
@@ -24,8 +29,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/boutique/check-status', [UserStatusController::class, 'checkBoutiqueStatus']);
 });
 
-// Protected Routes (Basic Authentication)
-Route::middleware(['auth:sanctum'])->group(function () {
+// Protected Routes (Authentication + Active status checks)
+Route::middleware(['auth:sanctum', 'check.user.active', 'check.boutique.active'])->group(function () {
     Route::get('/user', [AuthController::class, 'index']);
 // ... reste des routes ...
         Route::get('/user/{id}', [AuthController::class, 'showUser']);
@@ -63,6 +68,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('inventaires/{dateDebut}/{dateFin}', [ProduitController::class, 'inventaireDate']);
 
         // Sales (Ventes)
+        Route::post('ventes/sync-offline', [VenteController::class, 'syncOffline']);
         Route::apiResource('ventes', VenteController::class);
         Route::post('retourvente', [VenteController::class, 'modifierVente']);
         Route::get('annulevente/{id}', [VenteController::class, 'annuleVente']);
@@ -137,5 +143,17 @@ Route::middleware(['auth:sanctum'])->group(function () {
         
         // Natures Routes
         Route::apiResource('natures', \App\Http\Controllers\NatureController::class);
+
+        // Comptabilité SYSCOHADA Routes
+        Route::prefix('comptabilite')->group(function () {
+            Route::get('/comptes', [\App\Http\Controllers\ComptabiliteController::class, 'comptes']);
+            Route::post('/comptes', [\App\Http\Controllers\ComptabiliteController::class, 'storeCompte']);
+            Route::get('/journaux', [\App\Http\Controllers\ComptabiliteController::class, 'journaux']);
+            Route::get('/ecritures', [\App\Http\Controllers\ComptabiliteController::class, 'ecritures']);
+            Route::post('/ecritures', [\App\Http\Controllers\ComptabiliteController::class, 'storeEcriture']);
+            Route::get('/balance', [\App\Http\Controllers\ComptabiliteController::class, 'balance']);
+            Route::get('/grand-livre', [\App\Http\Controllers\ComptabiliteController::class, 'grandLivre']);
+            Route::get('/compte-resultat', [\App\Http\Controllers\ComptabiliteController::class, 'compteResultat']);
+        });
 
     });

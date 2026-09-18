@@ -112,6 +112,10 @@ class ProduitController extends Controller
                 ]);
             }
         }
+
+        // SYSCOHADA : Enregistrement comptable du réapprovisionnement (Achats de marchandises)
+        app(\App\Services\ComptaService::class)->enregistrerReappro($request->produits, $boutique_id, $user->id);
+
         return response()->json(['message' => 'Produit reapprovisionné avec succès'], 201);
     }
 

@@ -74,6 +74,7 @@
                         <tr>
                             <th class="px-8 py-6">Identité Boutique</th>
                             <th class="px-8 py-6">Propriétaire & Limit</th>
+                            <th class="px-8 py-6">Licence & Validité</th>
                             <th class="px-8 py-6 text-center">Status</th>
                             <th class="px-8 py-6 text-right">Actions</th>
                         </tr>
@@ -150,6 +151,29 @@
                                     @endif
                                 </td>
                                 <td class="px-8 py-6">
+                                    @if ($boutique->date_expiration_licence === null)
+                                        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-purple-50 text-purple-700">
+                                            <i class="bi bi-infinity text-xs"></i> Permanent
+                                        </span>
+                                    @elseif ($boutique->isLicenceExpired())
+                                        <div class="space-y-1">
+                                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 ring-1 ring-rose-200">
+                                                <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span> Expirée
+                                            </span>
+                                            <p class="text-[10px] text-rose-500 font-bold">{{ \Carbon\Carbon::parse($boutique->date_expiration_licence)->format('d/m/Y') }}</p>
+                                        </div>
+                                    @else
+                                        @php $jours = $boutique->joursRestants(); @endphp
+                                        <div class="space-y-1">
+                                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold {{ $jours <= 7 ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-200' : 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' }}">
+                                                <span class="w-1.5 h-1.5 rounded-full {{ $jours <= 7 ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500' }}"></span>
+                                                {{ $jours }} j restants
+                                            </span>
+                                            <p class="text-[10px] text-slate-400 font-semibold">{{ \Carbon\Carbon::parse($boutique->date_expiration_licence)->format('d/m/Y') }}</p>
+                                        </div>
+                                    @endif
+                                </td>
+                                <td class="px-8 py-6">
                                     <div class="flex justify-center">
                                         <form action="{{ route('admin.boutiques.toggle-status', $boutique) }}"
                                             method="POST">
@@ -166,10 +190,18 @@
                                 </td>
                                 <td class="px-8 py-6 text-right">
                                     <div class="flex items-center justify-end gap-2">
+                                        <a href="{{ route('admin.licences.index', ['boutique_id' => $boutique->id]) }}"
+                                            title="Gérer les licences & clés"
+                                            class="w-10 h-10 rounded-2xl bg-amber-50 text-amber-600 hover:bg-amber-500 hover:text-white flex items-center justify-center transition-all">
+                                            <i class="bi bi-key-fill"></i>
+                                        </a>
                                         <a href="{{ route('admin.boutiques.show', $boutique) }}"
+                                            title="Détails de la boutique"
                                             class="w-10 h-10 rounded-2xl bg-slate-100 text-slate-500 hover:bg-slate-900 hover:text-white flex items-center justify-center transition-all">
                                             <i class="bi bi-eye-fill"></i>
                                         </a>
+                                    </div>
+                                </td>
                                         {{-- <button class="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-500 hover:bg-indigo-600 hover:text-white flex items-center justify-center transition-all">
                                     <i class="bi bi-sliders"></i>
                                 </button> --}}

@@ -115,6 +115,10 @@ class CreditController extends Controller
                 $vente->montant_restant = $newRemaining;
             }
             $vente->save();
+
+            // Écriture comptable automatique SYSCOHADA (Débit Caisse, Crédit Client)
+            app(\App\Services\ComptaService::class)->enregistrerPaiementCredit($paiement);
+
             DB::commit();
             return response()->json(['message' => 'Paiement enregistré avec succès', 'paiement' => $paiement], 201);
         } catch (\Exception $e) {

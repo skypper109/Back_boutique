@@ -8,7 +8,9 @@ use App\Models\User;
 use App\Models\Vente;
 use App\Models\DetailVente;
 use App\Models\Nature;
+use App\Models\Licence;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -26,12 +28,13 @@ class SuperAdminController extends Controller
 
     public function dashboard()
     {
+        $validStatuses = ['validee', 'payee', 'credit'];
         $boutiquesCount = Boutique::count();
         $usersCount = User::count();
-        $totalSystemRevenue = Vente::where('statut', 'validee')->sum('montant_total');
+        $totalSystemRevenue = Vente::whereIn('statut', $validStatuses)->sum('montant_total');
 
-        $boutiquePerformance = Boutique::withSum(['ventes as revenue' => function ($query) {
-            $query->where('statut', 'validee');
+        $boutiquePerformance = Boutique::withSum(['ventes as revenue' => function ($query) use ($validStatuses) {
+            $query->whereIn('statut', $validStatuses);
         }], 'montant_total')
             ->orderByDesc('revenue')
             ->limit(5)
@@ -42,19 +45,20 @@ class SuperAdminController extends Controller
 
     public function boutiquesIndex()
     {
-        $boutiques = Boutique::with(['creator', 'nature'])->get();
+        $boutiques = Boutique::with(['creator', 'nature', 'licences'])->get();
         $natures = Nature::where('is_active', true)->get();
         return view('admin.boutiques.index', compact('boutiques', 'natures'));
     }
 
     public function boutiqueShow(Boutique $boutique)
     {
-        $salesCount = Vente::where('boutique_id', $boutique->id)->where('statut', 'validee')->count();
-        $totalRevenue = Vente::where('boutique_id', $boutique->id)->where('statut', 'validee')->sum('montant_total');
+        $validStatuses = ['validee', 'payee', 'credit'];
+        $salesCount = Vente::where('boutique_id', $boutique->id)->whereIn('statut', $validStatuses)->count();
+        $totalRevenue = Vente::where('boutique_id', $boutique->id)->whereIn('statut', $validStatuses)->sum('montant_total');
 
         $topProducts = DetailVente::with('produit')
-            ->whereHas('vente', function ($q) use ($boutique) {
-                $q->where('boutique_id', $boutique->id)->where('statut', 'validee');
+            ->whereHas('vente', function ($q) use ($boutique, $validStatuses) {
+                $q->where('boutique_id', $boutique->id)->whereIn('statut', $validStatuses);
             })
             ->selectRaw('produit_id, SUM(quantite) as total_qty, SUM(montant_total) as total_amount')
             ->groupBy('produit_id')
@@ -67,6 +71,8 @@ class SuperAdminController extends Controller
             ->orderByDesc('created_at')
             ->limit(10)
             ->get();
+
+        $boutique->load(['licences.creator', 'creator']);
 
         return view('admin.boutiques.show', compact('boutique', 'salesCount', 'totalRevenue', 'topProducts', 'recentSales'));
     }
@@ -227,4 +233,123 @@ class SuperAdminController extends Controller
         $boutique->delete();
         return redirect()->route('admin.boutiques.index')->with('success', 'Boutique supprimée avec succès.');
     }
+
+    /**
+     * Page de gestion globale des licences et abonnements
+     */
+    public function licencesIndex(Request $request)
+    {
+        $query = Licence::with(['boutique', 'creator'])->latest();
+
+        if ($request->filled('boutique_id')) {
+            $query->where('boutique_id', $request->boutique_id);
+        }
+
+        if ($request->filled('statut')) {
+            $query->where('statut', $request->statut);
+        }
+
+        $licences = $query->paginate(20);
+        $boutiques = Boutique::orderBy('nom')->get();
+
+        $stats = [
+            'total' => Licence::count(),
+            'inutilisees' => Licence::where('statut', 'inutilisee')->count(),
+            'actives' => Licence::where('statut', 'active')->count(),
+            'expirees' => Licence::where('statut', 'expiree')->count(),
+        ];
+
+        return view('admin.licences.index', compact('licences', 'boutiques', 'stats'));
+    }
+
+    /**
+     * Génère une nouvelle clé d'activation pour une boutique
+     */
+    public function licenceStore(Request $request)
+    {
+        $request->validate([
+            'boutique_id' => 'required|exists:boutiques,id',
+            'duree_jours' => 'required|integer|min:1',
+            'note' => 'nullable|string|max:255',
+        ]);
+
+        $cle = Licence::generateKey();
+
+        Licence::create([
+            'boutique_id' => $request->boutique_id,
+            'cle_licence' => $cle,
+            'duree_jours' => $request->duree_jours,
+            'statut' => 'inutilisee',
+            'created_by' => Auth::id(),
+            'note' => $request->note,
+        ]);
+
+        $boutique = Boutique::find($request->boutique_id);
+
+        $dureeLabel = $request->duree_jours >= 90000 ? 'À vie (Illimité)' : "{$request->duree_jours} jours";
+
+        return back()->with('success_cle', [
+            'cle' => $cle,
+            'boutique' => $boutique->nom,
+            'duree' => $dureeLabel,
+            'message' => "Nouvelle clé d'activation générée avec succès pour « {$boutique->nom} » !"
+        ]);
+    }
+
+    /**
+     * Prolonge directement l'abonnement d'une boutique sans que le client ait besoin de saisir une clé
+     */
+    public function licenceProlongerDirect(Request $request, Boutique $boutique)
+    {
+        $request->validate([
+            'duree_jours' => 'required|integer|min:1',
+            'note' => 'nullable|string|max:255',
+        ]);
+
+        $duree = (int) $request->duree_jours;
+        $isUnlimited = $duree >= 90000;
+
+        if ($isUnlimited) {
+            $newExpiration = null;
+        } else {
+            $base = ($boutique->date_expiration_licence && Carbon::parse($boutique->date_expiration_licence)->isFuture())
+                ? Carbon::parse($boutique->date_expiration_licence)
+                : Carbon::now();
+            $newExpiration = $base->addDays($duree);
+        }
+
+        $boutique->date_expiration_licence = $newExpiration;
+        $boutique->is_active = true;
+        $boutique->save();
+
+        // Enregistrer une licence active dans l'historique
+        Licence::create([
+            'boutique_id' => $boutique->id,
+            'cle_licence' => Licence::generateKey(),
+            'duree_jours' => $duree,
+            'statut' => 'active',
+            'date_activation' => Carbon::now(),
+            'date_expiration' => $newExpiration,
+            'created_by' => Auth::id(),
+            'note' => $request->note ?: 'Prolongation directe par le SuperAdmin',
+        ]);
+
+        $msg = $isUnlimited
+            ? "La boutique « {$boutique->nom} » a été activée à vie avec succès !"
+            : "La boutique « {$boutique->nom} » a été prolongée jusqu'au " . $newExpiration->format('d/m/Y') . " (+{$duree} jours).";
+
+        return back()->with('success', $msg);
+    }
+
+    /**
+     * Révoque une clé de licence
+     */
+    public function licenceRevoquer(Licence $licence)
+    {
+        $licence->statut = 'revoquee';
+        $licence->save();
+
+        return back()->with('success', "La clé d'activation {$licence->cle_licence} a été révoquée.");
+    }
 }
+

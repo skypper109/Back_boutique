@@ -16,20 +16,18 @@ class ExpenseController extends Controller
     {
         $query = Expense::query();
         
-        $user = Auth::user();
-        if ($user->role !== 'admin') {
-            $query->where('boutique_id', $user->boutique_id);
-        } elseif ($request->has('boutique_id')) {
-            $query->where('boutique_id', $request->boutique_id);
+        $boutiqueId = $this->getBoutiqueId() ?: $request->boutique_id;
+        if ($boutiqueId) {
+            $query->where('boutique_id', $boutiqueId);
         }
 
-        if ($request->has('month')) {
+        if ($request->has('month') && $request->month) {
             $query->whereMonth('date', $request->month);
         }
-        if ($request->has('year')) {
+        if ($request->has('year') && $request->year) {
             $query->whereYear('date', $request->year);
         }
-        if ($request->has('type')) {
+        if ($request->has('type') && $request->type) {
             $query->where('type', $request->type);
         }
 
@@ -41,17 +39,26 @@ class ExpenseController extends Controller
      */
     public function store(Request $request)
     {
+        $boutiqueId = $request->boutique_id ?: $this->getBoutiqueId();
+        if (!$boutiqueId) {
+            return response()->json(['message' => 'Boutique introuvable.'], 422);
+        }
+
         $fields = $request->validate([
             'type' => 'required|string',
             'montant' => 'required|numeric|min:0',
             'description' => 'nullable|string',
             'date' => 'required|date',
-            'boutique_id' => 'required|exists:boutiques,id',
+            'boutique_id' => 'nullable|exists:boutiques,id',
         ]);
 
+        $fields['boutique_id'] = $boutiqueId;
         $fields['user_id'] = Auth::id();
 
         $expense = Expense::create($fields);
+
+        // Écriture comptable automatique SYSCOHADA (Débit Charges Classe 6, Crédit Caisse)
+        app(\App\Services\ComptaService::class)->enregistrerDepense($expense);
 
         return response()->json($expense, 201);
     }
@@ -86,18 +93,16 @@ class ExpenseController extends Controller
      */
     public function destroy(Expense $expense)
     {
+        // SYSCOHADA : Contre-passation de la dépense annulée
+        app(\App\Services\ComptaService::class)->enregistrerAnnulationDepense($expense);
+        
         $expense->delete();
         return response()->json(['message' => 'Dépense supprimée']);
     }
 
     public function dashboard(Request $request)
     { 
-        $user = Auth::user();
-        $boutiqueId = $user->role === 'admin' ? $request->boutique_id : $user->boutique_id;
-        
-        if (!$boutiqueId && $user->role !== 'admin') {
-            return response()->json(['message' => 'Boutique n\'existe'], 400);
-        }
+        $boutiqueId = $this->getBoutiqueId() ?: $request->boutique_id;
 
         $query = Expense::query();
         if ($boutiqueId) {
@@ -120,7 +125,7 @@ class ExpenseController extends Controller
             ->get();
 
         return response()->json([
-            'total_year' => $totalByYear ?? 0,
+            'total_year' => (float)($totalByYear ?? 0),
             'monthly_evolution' => $monthlyEvolution ?? [],
             'breakdown_by_type' => $breakdownByType ?? [],
             'year' => $year ?? date('Y')

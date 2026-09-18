@@ -34,6 +34,15 @@ class EnsureBoutiqueIsActive
                     'error' => 'Cette boutique est désactivée. Accès refusé.'
                 ], 403);
             }
+            if ($boutique && $boutique->isLicenceExpired()) {
+                \Log::warning("Access denied: expired licence for boutique {$boutiqueId}");
+                return response()->json([
+                    'error' => 'licence_expired',
+                    'message' => "La licence de votre boutique « {$boutique->nom} » a expiré. Veuillez saisir une nouvelle clé d'activation.",
+                    'boutique_id' => $boutique->id,
+                    'date_expiration' => $boutique->date_expiration_licence
+                ], 403);
+            }
             if (!$boutique) {
                 \Log::error("Boutique {$boutiqueId} not found in middleware");
             }

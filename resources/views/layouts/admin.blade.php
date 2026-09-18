@@ -123,6 +123,12 @@
                 <i class="bi bi-shield-lock-fill"></i>
                 <span>Contrôle Accès</span>
             </a>
+
+            <a href="{{ route('admin.licences.index') }}"
+                class="nav-link {{ request()->routeIs('admin.licences.*') ? 'active' : '' }}">
+                <i class="bi bi-key-fill"></i>
+                <span>Licences & Abonnements</span>
+            </a>
         </nav>
 
         <!-- Footer / Logout -->

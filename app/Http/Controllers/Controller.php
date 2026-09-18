@@ -27,7 +27,7 @@ abstract class Controller
     }
 
     /**
-     * Obtenir l'ID de la boutique actuelle.
+     * Obtenir l'ID de la boutique actuelle de manière sécurisée.
      */
     protected function getBoutiqueId()
     {
@@ -40,8 +40,16 @@ abstract class Controller
         if (!$user) return null;
 
         $headerBoutiqueId = request()->header('X-Boutique-Id');
-        return ($headerBoutiqueId && $headerBoutiqueId !== 'null' && $headerBoutiqueId !== '') 
+        $requestedId = ($headerBoutiqueId && $headerBoutiqueId !== 'null' && $headerBoutiqueId !== '') 
             ? (int) $headerBoutiqueId 
-            : $user->boutique_id;
+            : null;
+
+        // Seuls les administrateurs globaux peuvent basculer librement d'une boutique à une autre
+        if (in_array($user->role, ['admin', 'admin1'])) {
+            return $requestedId ?: $user->boutique_id;
+        }
+
+        // Pour les autres rôles (vendeur, gestionnaire, comptable), la boutique assignée est impérative
+        return $user->boutique_id;
     }
 }

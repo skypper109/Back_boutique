@@ -91,6 +91,138 @@
             </div>
         </div>
 
+        <!-- Section Abonnement & Licences -->
+        <div class="glass-card rounded-[2.5rem] p-8 mb-12 shadow-xl border border-slate-200/80">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-slate-100">
+                <div class="flex items-center gap-4">
+                    <div class="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center text-2xl shadow-sm">
+                        <i class="bi bi-key-fill"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-2xl font-black text-slate-900 tracking-tight">Abonnement & Licences</h3>
+                        <p class="text-xs text-slate-500 font-medium">Contrôlez la validité de l'accès de la caisse et générez des clés d'activation.</p>
+                    </div>
+                </div>
+                <div class="flex flex-wrap items-center gap-3">
+                    <button onclick="document.getElementById('modalGenereCleBoutique').classList.remove('hidden')"
+                        class="btn-action bg-primary-600 text-white shadow-lg shadow-primary-500/20 hover:bg-primary-700 text-xs">
+                        <i class="bi bi-magic"></i>
+                        <span>Générer une Clé</span>
+                    </button>
+                    <a href="{{ route('admin.licences.index', ['boutique_id' => $boutique->id]) }}"
+                        class="btn-action bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs">
+                        <i class="bi bi-list-stars"></i>
+                        <span>Historique Clés</span>
+                    </a>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 py-6 border-b border-slate-100">
+                <div class="p-5 bg-slate-50 rounded-2xl border border-slate-100">
+                    <span class="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1">Statut Actuel</span>
+                    @if ($boutique->date_expiration_licence === null)
+                        <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black bg-purple-100 text-purple-800">
+                            <i class="bi bi-infinity"></i> Actif à Vie (Illimité)
+                        </span>
+                    @elseif ($boutique->isLicenceExpired())
+                        <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black bg-rose-100 text-rose-800">
+                            <i class="bi bi-exclamation-octagon-fill"></i> Licence Expirée
+                        </span>
+                    @else
+                        @php $jours = $boutique->joursRestants(); @endphp
+                        <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black {{ $jours <= 7 ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800' }}">
+                            <span class="w-2 h-2 rounded-full {{ $jours <= 7 ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500' }}"></span>
+                            Valide &bull; {{ $jours }} jours restants
+                        </span>
+                    @endif
+                </div>
+
+                <div class="p-5 bg-slate-50 rounded-2xl border border-slate-100">
+                    <span class="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1">Date d'Échéance</span>
+                    <p class="text-lg font-black text-slate-800">
+                        {{ $boutique->date_expiration_licence ? \Carbon\Carbon::parse($boutique->date_expiration_licence)->format('d/m/Y à H:i') : 'Aucune restriction' }}
+                    </p>
+                </div>
+
+                <div class="p-5 bg-slate-50 rounded-2xl border border-slate-100">
+                    <span class="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-2">Prolongation Directe en 1 Clic</span>
+                    <form action="{{ route('admin.boutiques.prolonger-licence', $boutique->id) }}" method="POST" class="flex flex-wrap gap-2">
+                        @csrf
+                        <input type="hidden" name="note" value="Prolongation rapide depuis fiche boutique">
+                        <button type="submit" name="duree_jours" value="30" class="px-3 py-1.5 bg-white hover:bg-emerald-50 text-emerald-700 hover:border-emerald-300 border border-slate-200 rounded-xl text-xs font-bold transition-all shadow-sm">
+                            +30j
+                        </button>
+                        <button type="submit" name="duree_jours" value="90" class="px-3 py-1.5 bg-white hover:bg-emerald-50 text-emerald-700 hover:border-emerald-300 border border-slate-200 rounded-xl text-xs font-bold transition-all shadow-sm">
+                            +90j
+                        </button>
+                        <button type="submit" name="duree_jours" value="365" class="px-3 py-1.5 bg-white hover:bg-emerald-50 text-emerald-700 hover:border-emerald-300 border border-slate-200 rounded-xl text-xs font-bold transition-all shadow-sm">
+                            +1 An
+                        </button>
+                        <button type="submit" name="duree_jours" value="99999" class="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-xl text-xs font-bold transition-all shadow-sm">
+                            À Vie
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Dernières clés générées pour cette boutique -->
+            <div class="mt-6">
+                <h4 class="text-xs font-black uppercase tracking-widest text-slate-400 mb-3">Dernières clés d'activation de cette boutique</h4>
+                @if($boutique->licences->count() > 0)
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    @foreach($boutique->licences->take(6) as $lic)
+                    <div class="p-3 bg-white rounded-xl border border-slate-200 flex items-center justify-between text-xs">
+                        <div>
+                            <span class="font-mono font-bold text-slate-900 select-all">{{ $lic->cle_licence }}</span>
+                            <span class="text-[10px] text-slate-400 block">{{ $lic->duree_jours >= 90000 ? 'À vie' : $lic->duree_jours . 'j' }} &bull; {{ $lic->created_at->format('d/m/Y') }}</span>
+                        </div>
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold {{ $lic->statut === 'inutilisee' ? 'bg-amber-100 text-amber-800' : ($lic->statut === 'active' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600') }}">
+                            {{ $lic->statut === 'inutilisee' ? 'En attente' : ($lic->statut === 'active' ? 'Active' : $lic->statut) }}
+                        </span>
+                    </div>
+                    @endforeach
+                </div>
+                @else
+                <p class="text-xs text-slate-400 italic">Aucune clé de licence générée pour cette boutique.</p>
+                @endif
+            </div>
+        </div>
+
+        <!-- Modal Génération Clé Dédiée à cette Boutique -->
+        <div id="modalGenereCleBoutique" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-6">
+            <div class="absolute inset-0 bg-slate-950/40 backdrop-blur-xl" onclick="this.parentElement.classList.add('hidden')"></div>
+            <div class="relative w-full max-w-md glass-card rounded-[2.5rem] p-8 shadow-2xl">
+                <div class="flex items-center justify-between mb-6">
+                    <h3 class="text-xl font-black text-slate-900">Nouvelle Clé pour {{ $boutique->nom }}</h3>
+                    <button onclick="document.getElementById('modalGenereCleBoutique').classList.add('hidden')" class="text-slate-400 hover:text-slate-900">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                </div>
+                <form action="{{ route('admin.licences.store') }}" method="POST" class="space-y-4">
+                    @csrf
+                    <input type="hidden" name="boutique_id" value="{{ $boutique->id }}">
+                    <div>
+                        <label class="block text-xs font-black uppercase tracking-widest text-slate-400 mb-2">Durée</label>
+                        <select name="duree_jours" class="w-full px-4 py-3 bg-slate-100 border-none rounded-2xl text-sm font-bold">
+                            <option value="30">1 Mois (30 jours)</option>
+                            <option value="90">3 Mois (90 jours)</option>
+                            <option value="180">6 Mois (180 jours)</option>
+                            <option value="365">1 An (365 jours)</option>
+                            <option value="99999">À Vie (Illimité)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-black uppercase tracking-widest text-slate-400 mb-2">Note (Facultatif)</label>
+                        <input type="text" name="note" placeholder="Ex: Règlement reçu" class="w-full px-4 py-3 bg-slate-100 border-none rounded-2xl text-sm font-semibold">
+                    </div>
+                    <div class="pt-4 flex justify-end gap-3">
+                        <button type="button" onclick="document.getElementById('modalGenereCleBoutique').classList.add('hidden')" class="px-4 py-2 font-bold text-slate-500">Annuler</button>
+                        <button type="submit" class="btn-action bg-primary-600 text-white">Générer la Clé</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         <!-- Tables Grid -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-10">
             <!-- Top Products -->

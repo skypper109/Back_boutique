@@ -369,6 +369,9 @@ class VenteController extends Controller
             $vente->statut = 'annulee';
             $vente->save();
 
+            // SYSCOHADA : Contre-passation de la vente annulée
+            app(\App\Services\ComptaService::class)->enregistrerAnnulationVente($vente);
+
             DB::commit();
             return response()->json(["message" => "Vente Annulée avec succès"], 200);
         } catch (\Exception $e) {
@@ -747,12 +750,20 @@ class VenteController extends Controller
 
         $client_id = 1;
         if ($request->client_nom) {
-            $client_nom = strtoupper($request->client_nom);
-            $client = Client::where('telephone', $request->client_numero)->first();
+            $client_nom = strtoupper(trim($request->client_nom));
+            $client_numero = !empty($request->client_numero) ? trim($request->client_numero) : null;
+
+            $client = null;
+            if ($client_numero) {
+                $client = Client::where('telephone', $client_numero)->first();
+            }
+            if (!$client) {
+                $client = Client::where('nom', $client_nom)->where('telephone', $client_numero)->first();
+            }
             if (!$client) {
                 $client = Client::create([
                     'nom' => $client_nom,
-                    'telephone' => $request->client_numero
+                    'telephone' => $client_numero
                 ]);
             }
             $client_id = $client->id;
@@ -876,6 +887,9 @@ class VenteController extends Controller
                     'facture_id' => $facture->id,
                     'vente_id' => $vente->id
                 ]);
+
+                // Génération de l'écriture comptable automatique SYSCOHADA
+                app(\App\Services\ComptaService::class)->enregistrerVente($vente);
             }
 
             DB::commit();
@@ -888,6 +902,154 @@ class VenteController extends Controller
             DB::rollBack();
             return response()->json(['message' => $e->getMessage()], 400);
         }
+    }
+
+    /**
+     * Synchronisation par lot des ventes créées en mode hors-ligne (Offline-First)
+     */
+    public function syncOffline(Request $request)
+    {
+        $request->validate([
+            'ventes' => 'required|array|min:1',
+        ]);
+
+        $user = Auth::user();
+        $boutique_id = $this->getBoutiqueId();
+
+        if (!$boutique_id) {
+            return response()->json(['message' => 'Boutique non identifiée.'], 400);
+        }
+
+        $synced = [];
+        $errors = [];
+
+        foreach ($request->ventes as $vData) {
+            $offlineId = $vData['offline_id'] ?? null;
+            try {
+                // Créer une sous-requête avec les données de la vente
+                $subRequest = new Request($vData);
+                $subRequest->setUserResolver(fn() => $user);
+
+                // Traiter chaque vente dans une transaction individuelle
+                DB::beginTransaction();
+
+                $client_id = 1;
+                if (!empty($vData['client_nom'])) {
+                    $cNom = strtoupper(trim($vData['client_nom']));
+                    $cNum = !empty($vData['client_numero']) ? trim($vData['client_numero']) : null;
+                    $client = null;
+                    if ($cNum) {
+                        $client = Client::where('telephone', $cNum)->first();
+                    }
+                    if (!$client) {
+                        $client = Client::where('nom', $cNom)->first();
+                    }
+                    if (!$client) {
+                        $client = Client::create([
+                            'nom' => $cNom,
+                            'telephone' => $cNum,
+                        ]);
+                    }
+                    $client_id = $client->id;
+                }
+
+                $typePaiement = $vData['type_paiement'] ?? 'contant';
+                $vente = new Vente();
+                $vente->client_id = $client_id;
+                $vente->boutique_id = $boutique_id;
+                $vente->user_id = $user->id;
+                $vente->montant_total = $vData['montant_total'];
+                $vente->type_paiement = $typePaiement;
+                $vente->montant_avance = $vData['montant_avance'] ?? 0;
+                $vente->remise = $vData['remise'] ?? 0;
+                $vente->statut = ($typePaiement === 'credit') ? 'credit' : 'payee';
+                $vente->montant_restant = ($typePaiement === 'credit')
+                    ? ($vData['montant_total'] - $vente->montant_avance)
+                    : 0;
+                $vente->date_vente = !empty($vData['date']) ? $vData['date'] : now()->format('Y-m-d');
+                $vente->save();
+
+                foreach ($vData['produits'] as $item) {
+                    $pId = $item['produits']['id'] ?? ($item['id'] ?? 0);
+                    $pNom = $item['produits']['nom'] ?? ($item['nom'] ?? "Produit #$pId");
+
+                    $stock = Stock::where('produit_id', $pId)
+                        ->where('boutique_id', $boutique_id)
+                        ->first();
+
+                    if ($stock) {
+                        $stock->quantite = max(0, $stock->quantite - $item['quantite']);
+                        $stock->save();
+                    }
+
+                    $prixU = $item['prix_vendu'] ?? ($item['prix'] ?? ($stock->prix_vente ?? 0));
+                    $remiseLine = ($item['remise_unitaire'] ?? 0) * $item['quantite'];
+
+                    $detail = new DetailVente();
+                    $detail->vente_id = $vente->id;
+                    $detail->produit_id = $pId;
+                    $detail->quantite = $item['quantite'];
+                    $detail->prix_unitaire = $prixU;
+                    $detail->montant = $prixU * $item['quantite'];
+                    $detail->remise = $remiseLine;
+                    $detail->montant_total = $detail->montant;
+                    $detail->montant_paye = $detail->montant - $remiseLine;
+                    $detail->quantite_restante = $item['quantite'];
+                    $detail->save();
+
+                    Inventaire::create([
+                        'produit_id' => $pId,
+                        'boutique_id' => $boutique_id,
+                        'user_id' => $user->id,
+                        'vente_id' => $vente->id,
+                        'quantite' => $item['quantite'],
+                        'type' => 'retrait',
+                        'prix_achat' => $stock ? $stock->prix_achat : 0,
+                        'prix_vente' => $prixU,
+                        'remise' => $remiseLine,
+                        'description' => "Vente hors-ligne synchronisée #" . $vente->id,
+                        'date' => $vente->date_vente,
+                    ]);
+                }
+
+                $facture = Facture::create([
+                    'client_id' => $client_id,
+                    'boutique_id' => $boutique_id,
+                    'montant_total' => $vente->montant_total,
+                    'date_facturation' => $vente->date_vente,
+                    'statut' => ($vente->type_paiement === 'credit' ? 'en attente' : 'payée'),
+                    'description' => 'Facture Vente Synchronisée #' . $vente->id,
+                ]);
+
+                FactureVente::create([
+                    'facture_id' => $facture->id,
+                    'vente_id' => $vente->id,
+                ]);
+
+                // Écriture comptable SYSCOHADA
+                app(\App\Services\ComptaService::class)->enregistrerVente($vente);
+
+                DB::commit();
+
+                $synced[] = [
+                    'offline_id' => $offlineId,
+                    'server_id' => $vente->id,
+                    'facture_id' => $facture->id,
+                ];
+            } catch (\Exception $e) {
+                DB::rollBack();
+                $errors[] = [
+                    'offline_id' => $offlineId,
+                    'error' => $e->getMessage(),
+                ];
+            }
+        }
+
+        return response()->json([
+            'message' => count($synced) . ' vente(s) synchronisée(s) avec succès.',
+            'synced' => $synced,
+            'errors' => $errors,
+        ], 200);
     }
 
     public function convertProformaToSale(Request $request, $id)
@@ -982,6 +1144,9 @@ class VenteController extends Controller
                 'facture_id' => $facture->id,
                 'vente_id' => $vente->id
             ]);
+
+            // Génération de l'écriture comptable automatique SYSCOHADA (car c'est maintenant une vraie vente)
+            app(\App\Services\ComptaService::class)->enregistrerVente($vente);
 
             DB::commit();
             return response()->json([

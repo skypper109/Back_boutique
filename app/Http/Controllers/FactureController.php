@@ -46,9 +46,12 @@ class FactureController extends Controller
             ->where('id', $IDfacture)
             ->firstOrFail();
 
-        $produitAchat = [];
+        $totalAvance = 0;
+        $totalRestant = 0;
         foreach ($facture->factureVentes as $fv) {
             if ($fv->vente) {
+                $totalAvance += ($fv->vente->montant_avance ?? 0);
+                $totalRestant += ($fv->vente->montant_restant ?? 0);
                 foreach ($fv->vente->detailVentes as $dv) {
                     $produitAchat[] = [
                         'nomProduit' => $dv->produit ? $dv->produit->nom : 'Produit inconnu',
@@ -81,8 +84,10 @@ class FactureController extends Controller
             'dateFacture' => $facture->date_facturation,
             'montant_total' => $facture->montant_total,
             'montant_remis' => $facture->factureVentes->first()->vente->detailVentes->first()->remise ?? 0,
+            'montant_avance' => $totalAvance,
+            'montant_restant' => $totalRestant,
             'nomBoutique' => $nomBoutique,
-            'statut' =>$facture->statut,
+            'statut' => $facture->statut,
             'adresseBoutique' => $adresseBoutique,
             'telephoneBoutique' => $telephoneBoutique,
             'produitAchat' => $produitAchat

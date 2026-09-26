@@ -7,6 +7,7 @@ use App\Models\Client;
 use App\Models\FactureVente;
 use App\Models\Facture;
 use App\Models\PaiementCredit;
+use App\Models\Inventaire;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -141,13 +142,33 @@ class CreditController extends Controller
     public function history($id)
     {
         $boutique_id = $this->getBoutiqueId();
-        $paiements = PaiementCredit::with(['vente.client', 'user'])
+        $movements = Inventaire::with(['produit.categorie', 'user'])
             ->where('vente_id', $id)
             ->where('boutique_id', $boutique_id)
-            ->orderBy('date_paiement', 'desc')
+            ->whereNotNull('produit_id')
+            ->orderBy('created_at', 'desc')
             ->get();
 
-        return response()->json($paiements, 200);
+        if ($movements->isEmpty()) {
+            $vente = Vente::with(['detailVentes.produit.categorie', 'user'])->find($id);
+            if ($vente && $vente->detailVentes) {
+                $virtualMovements = [];
+                foreach ($vente->detailVentes as $dv) {
+                    $virtualMovements[] = [
+                        'id' => 'v-' . $dv->id,
+                        'date' => $vente->date_vente ?? $vente->created_at,
+                        'type' => 'retrait',
+                        'quantite' => $dv->quantite,
+                        'produit' => $dv->produit,
+                        'user' => $vente->user,
+                        'description' => 'Sortie stock vente initiale #' . $vente->id,
+                    ];
+                }
+                return response()->json($virtualMovements, 200);
+            }
+        }
+
+        return response()->json($movements, 200);
     }
 
     /**
@@ -156,7 +177,7 @@ class CreditController extends Controller
     public function saleStatement($id)
     {
         $boutique_id = $this->getBoutiqueId();
-        $vente = Vente::with(['client', 'user', 'detailVentes.produit', 'paiementsCredit.user', 'boutique'])
+        $vente = Vente::with(['client', 'user', 'detailVentes.produit.categorie', 'paiementsCredit.user', 'boutique'])
             ->where('id', $id)
             ->where('boutique_id', $boutique_id)
             ->firstOrFail();

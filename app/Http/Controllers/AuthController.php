@@ -65,7 +65,7 @@ class AuthController extends Controller
         return response()->json([
             'user' => $user,
             'user_role' => $user->role,
-            'boutique_id' => $user->boutique_id,
+            'boutique_id' => $user->boutique_id ?: (\App\Models\Boutique::first()?->id),
             'access_token' => $token
         ], 201);
     }

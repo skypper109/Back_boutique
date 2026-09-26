@@ -2,6 +2,7 @@
 
 @section('title', 'Compte de Résultat SYSCOHADA')
 @section('orientation', 'portrait')
+@section('page_margin', '12mm 15mm 20mm 15mm')
 
 @section('styles')
     <style>
@@ -12,37 +13,36 @@
         }
 
         .header-box {
-            border: 2px solid #333;
-            padding: 12px 15px;
-            margin-bottom: 15px;
-            background-color: #fcfcfc;
+            border-bottom: 1.5px solid #cbd5e1;
+            padding-bottom: 10px;
+            margin-bottom: 14px;
         }
 
         .company-name {
-            font-size: 16pt;
-            font-weight: bold;
-            color: #1e1b4b;
+            font-size: 15pt;
+            font-weight: 900;
+            color: #0f172a;
             margin-bottom: 2px;
         }
 
         .doc-badge {
-            background-color: #4338ca;
+            background-color: #1e293b;
             color: #fff;
-            padding: 8px 14px;
+            padding: 5px 12px;
             text-align: center;
-            font-size: 13pt;
+            font-size: 11pt;
             font-weight: bold;
             border-radius: 4px;
         }
 
         .section-header {
-            background-color: #f1f5f9;
-            border-left: 4px solid #4338ca;
+            background-color: #f8fafc;
+            border-left: 3px solid #334155;
             padding: 6px 10px;
             font-weight: bold;
-            font-size: 9.5pt;
-            color: #1e1b4b;
-            margin-top: 15px;
+            font-size: 9pt;
+            color: #0f172a;
+            margin-top: 14px;
             margin-bottom: 5px;
         }
 
@@ -63,13 +63,14 @@
 
         .excel-table th,
         .excel-table td {
-            border: 1px solid #94a3b8;
+            border: 1px solid #cbd5e1;
             padding: 5px 8px;
             word-wrap: break-word;
         }
 
         .excel-table th {
-            background-color: #e2e8f0;
+            background-color: #f8fafc;
+            color: #334155;
             font-weight: bold;
             text-transform: uppercase;
             font-size: 7.5pt;

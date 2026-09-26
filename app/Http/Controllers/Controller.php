@@ -46,10 +46,17 @@ abstract class Controller
 
         // Seuls les administrateurs globaux peuvent basculer librement d'une boutique à une autre
         if (in_array($user->role, ['admin', 'admin1'])) {
-            return $requestedId ?: $user->boutique_id;
+            if ($requestedId) {
+                return $requestedId;
+            }
+            if ($user->boutique_id) {
+                return $user->boutique_id;
+            }
+            // Fallback automatique sur la première boutique existante pour le super admin
+            return \App\Models\Boutique::first()?->id;
         }
 
         // Pour les autres rôles (vendeur, gestionnaire, comptable), la boutique assignée est impérative
-        return $user->boutique_id;
+        return $user->boutique_id ?: (\App\Models\Boutique::first()?->id);
     }
 }

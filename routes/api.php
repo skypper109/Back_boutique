@@ -144,16 +144,17 @@ Route::middleware(['auth:sanctum', 'check.user.active', 'check.boutique.active']
         // Natures Routes
         Route::apiResource('natures', \App\Http\Controllers\NatureController::class);
 
-        // Comptabilité SYSCOHADA Routes
-        Route::prefix('comptabilite')->group(function () {
+        // Comptabilité SYSCOHADA Routes (Accès sécurisé par rôles)
+        Route::prefix('comptabilite')->middleware('role:admin,comptable,gestionnaire')->group(function () {
             Route::get('/comptes', [\App\Http\Controllers\ComptabiliteController::class, 'comptes']);
-            Route::post('/comptes', [\App\Http\Controllers\ComptabiliteController::class, 'storeCompte']);
+            Route::post('/comptes', [\App\Http\Controllers\ComptabiliteController::class, 'storeCompte'])->middleware('role:admin,comptable');
             Route::get('/journaux', [\App\Http\Controllers\ComptabiliteController::class, 'journaux']);
             Route::get('/ecritures', [\App\Http\Controllers\ComptabiliteController::class, 'ecritures']);
-            Route::post('/ecritures', [\App\Http\Controllers\ComptabiliteController::class, 'storeEcriture']);
+            Route::post('/ecritures', [\App\Http\Controllers\ComptabiliteController::class, 'storeEcriture'])->middleware('role:admin,comptable');
             Route::get('/balance', [\App\Http\Controllers\ComptabiliteController::class, 'balance']);
             Route::get('/grand-livre', [\App\Http\Controllers\ComptabiliteController::class, 'grandLivre']);
             Route::get('/compte-resultat', [\App\Http\Controllers\ComptabiliteController::class, 'compteResultat']);
+            Route::get('/bilan', [\App\Http\Controllers\ComptabiliteController::class, 'bilan']);
         });
 
     });

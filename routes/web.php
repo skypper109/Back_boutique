@@ -50,6 +50,7 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
     Route::post('/licences', [SuperAdminController::class, 'licenceStore'])->name('admin.licences.store');
     Route::post('/boutiques/{boutique}/prolonger-licence', [SuperAdminController::class, 'licenceProlongerDirect'])->name('admin.boutiques.prolonger-licence');
     Route::post('/licences/{licence}/revoquer', [SuperAdminController::class, 'licenceRevoquer'])->name('admin.licences.revoquer');
+    Route::delete('/licences/{licence}', [SuperAdminController::class, 'licenceDestroy'])->name('admin.licences.destroy');
 });
 
 Route::get('/', function () {

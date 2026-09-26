@@ -200,6 +200,9 @@ class VenteController extends Controller
                 }
                 $vente->montant_total = 0;
                 $vente->remise = 0;
+
+                // SYSCOHADA : Contre-passation de la vente totalement retournée / annulée
+                app(\App\Services\ComptaService::class)->enregistrerAnnulationVente($vente);
             } else {
                 if ($vente->type_paiement == 'credit') {
                     $ancienNet = $vente->montant_total;
@@ -418,46 +421,83 @@ class VenteController extends Controller
         return response()->json($ventes, 200);
     }
 
-    public function chiffre()
+    public function chiffre(Request $request)
     {
         $boutique_id = $this->getBoutiqueId();
-        $currentYear = now()->year;
 
-        // 1. Annual Summary (Simple CA from Ventes table for the list)
-        $parAnnee = Vente::where('boutique_id', $boutique_id)
+        // 1. All created years for this boutique from Annees table
+        $anneesBoutique = \App\Models\Annee::where(function ($q) use ($boutique_id) {
+            $q->whereNull('boutique_id')->orWhere('boutique_id', $boutique_id);
+        })->orderBy('annee', 'desc')->get();
+
+        // 2. Any additional years with recorded sales
+        $anneesVentes = Vente::where('boutique_id', $boutique_id)
             ->whereIn('statut', ['validee', 'payee', 'credit'])
             ->selectRaw("YEAR(date_vente) as annee, SUM(montant_total) as ca")
             ->groupByRaw("YEAR(date_vente)")
-            ->orderByRaw("YEAR(date_vente) DESC")
-            ->get();
+            ->get()
+            ->keyBy('annee');
 
-        // 2. Monthly Detail (More precise, including returns and costs)
-        // We calculate this from Inventaire to be consistent with the audit page
-        // We filter out inventory entries linked to cancelled sales
-        $mouvements = Inventaire::with(['produit.stock', 'vente'])
+        // Combined distinct years
+        $allYears = $anneesBoutique->pluck('annee')->merge($anneesVentes->keys())->unique()->sortDesc()->values();
+        if ($allYears->isEmpty()) {
+            $allYears = collect([now()->year]);
+        }
+
+        $parAnnee = [];
+        foreach ($allYears as $y) {
+            $anneeModel = $anneesBoutique->first(function($item) use ($y) {
+                return (int)$item->annee === (int)$y;
+            });
+            $venteModel = $anneesVentes->get((int)$y);
+            $parAnnee[] = [
+                'annee' => (int)$y,
+                'ca' => $venteModel ? (float)$venteModel->ca : 0,
+                'is_active' => $anneeModel ? (bool)$anneeModel->is_active : false,
+            ];
+        }
+
+        // Active / target year
+        $activeYearModel = $anneesBoutique->firstWhere('is_active', true);
+        $defaultYear = $activeYearModel ? (int)$activeYearModel->annee : (int)$allYears->first();
+        $targetYear = $request->has('annee') && $request->annee ? (int)$request->annee : $defaultYear;
+
+        // Date and Month filtering
+        $dateDebut = $request->query('date_debut');
+        $dateFin = $request->query('date_fin');
+        $mois = $request->query('mois');
+
+        // Calculate movements
+        $movQuery = Inventaire::with(['produit.stock', 'vente'])
             ->where('boutique_id', $boutique_id)
-            ->whereYear('date', $currentYear)
             ->whereNotNull('vente_id')
             ->whereHas('vente', function($q) {
                 $q->whereIn('statut', ['validee', 'payee', 'credit']);
-            })
-            ->get();
+            });
+
+        if ($dateDebut && $dateFin) {
+            $movQuery->whereBetween('date', [$dateDebut, $dateFin]);
+        } elseif ($mois) {
+            $movQuery->whereYear('date', $targetYear)->whereMonth('date', (int)$mois);
+        } else {
+            $movQuery->whereYear('date', $targetYear);
+        }
+
+        $mouvements = $movQuery->get();
 
         $statsMensuelles = [];
-        // Initialize 12 months
         for ($i = 1; $i <= 12; $i++) {
             $statsMensuelles[$i] = [
                 'mois_num' => $i,
                 'ca' => 0,
                 'qtv' => 0,
                 'cout_achat' => 0,
-                'remises_traitees' => [] // To track global remise per vente_id
+                'remises_traitees' => []
             ];
         }
 
         foreach ($mouvements as $mov) {
-            $m = \Carbon\Carbon::parse($mov->date)->month;
-
+            $m = (int)\Carbon\Carbon::parse($mov->date)->month;
             $pxA = $mov->prix_achat ?? ($mov->produit->stock->prix_achat ?? 0);
             $pxV = $mov->prix_vente ?? ($mov->produit->stock->prix_vente ?? 0);
             
@@ -466,49 +506,84 @@ class VenteController extends Controller
                 $statsMensuelles[$m]['qtv'] += $mov->quantite;
                 $statsMensuelles[$m]['cout_achat'] += ($mov->quantite * $pxA);
             } else {
-                // It's a return (ajout linked to vente_id)
                 $statsMensuelles[$m]['ca'] -= ($mov->quantite * $pxV);
                 $statsMensuelles[$m]['qtv'] -= $mov->quantite;
                 $statsMensuelles[$m]['cout_achat'] -= ($mov->quantite * $pxA);
             }
         }
 
-        // Calculate global remises per month from the Vente table for consistency
-        $ventesAvecRemise = Vente::where('boutique_id', $boutique_id)
-            ->whereYear('date_vente', $currentYear)
+        // Remises query with matching date scope
+        $ventesAvecRemiseQuery = Vente::where('boutique_id', $boutique_id)
             ->where('remise', '>', 0)
-            ->whereIn('statut', ['validee', 'payee', 'credit'])
-            ->get();
+            ->whereIn('statut', ['validee', 'payee', 'credit']);
+
+        if ($dateDebut && $dateFin) {
+            $ventesAvecRemiseQuery->whereBetween('date_vente', [$dateDebut, $dateFin]);
+        } elseif ($mois) {
+            $ventesAvecRemiseQuery->whereYear('date_vente', $targetYear)->whereMonth('date_vente', (int)$mois);
+        } else {
+            $ventesAvecRemiseQuery->whereYear('date_vente', $targetYear);
+        }
+
+        $ventesAvecRemise = $ventesAvecRemiseQuery->get();
 
         foreach ($ventesAvecRemise as $v) {
-            $m = \Carbon\Carbon::parse($v->date_vente)->month;
+            $m = (int)\Carbon\Carbon::parse($v->date_vente)->month;
             $statsMensuelles[$m]['ca'] -= (float)$v->remise;
         }
 
-        // Convert to numerical array and sort desc by month
-        $parMois = array_values($statsMensuelles);
-        usort($parMois, function($a, $b) {
-            return $b['mois_num'] - $a['mois_num'];
-        });
+        $moisGlobal = array_values($statsMensuelles);
 
-        // 3. Global Stats for the current year
+        if ($mois) {
+            $mInt = (int)$mois;
+            $tableMois = isset($statsMensuelles[$mInt]) ? [$statsMensuelles[$mInt]] : [];
+        } elseif ($dateDebut && $dateFin) {
+            $startM = (int)\Carbon\Carbon::parse($dateDebut)->month;
+            $endM = (int)\Carbon\Carbon::parse($dateFin)->month;
+            $tableMois = [];
+            for ($i = min($startM, $endM); $i <= max($startM, $endM); $i++) {
+                if (isset($statsMensuelles[$i])) {
+                    $tableMois[] = $statsMensuelles[$i];
+                }
+            }
+            usort($tableMois, function($a, $b) {
+                return $b['mois_num'] - $a['mois_num'];
+            });
+        } else {
+            $tableMois = array_values($statsMensuelles);
+            usort($tableMois, function($a, $b) {
+                return $b['mois_num'] - $a['mois_num'];
+            });
+        }
+
         $globalStats = [
             'total_ca' => 0,
             'total_qtv' => 0,
-            'total_benefice' => 0
+            'total_benefice' => 0,
+            'total_cout_achat' => 0,
+            'taux_marge' => 0
         ];
 
-        foreach ($parMois as $m) {
+        foreach ($tableMois as $m) {
             $globalStats['total_ca'] += $m['ca'];
             $globalStats['total_qtv'] += $m['qtv'];
+            $globalStats['total_cout_achat'] += $m['cout_achat'];
             $globalStats['total_benefice'] += ($m['ca'] - $m['cout_achat']);
+        }
+
+        if ($globalStats['total_ca'] > 0) {
+            $globalStats['taux_marge'] = round(($globalStats['total_benefice'] / $globalStats['total_ca']) * 100, 1);
         }
 
         return response()->json([
             'par_annee' => $parAnnee,
-            'par_mois' => $parMois,
+            'par_mois' => $tableMois,
+            'mois_global' => $moisGlobal,
             'annual_stats' => $globalStats,
-            'annee_actuelle' => $currentYear
+            'annee_actuelle' => $targetYear,
+            'date_debut' => $dateDebut,
+            'date_fin' => $dateFin,
+            'mois_selectionne' => $mois ? (int)$mois : null
         ], 200);
     }
 
@@ -536,20 +611,31 @@ class VenteController extends Controller
         return response()->json($annee, 200);
     }
 
-    public function getVenteByAnnee($annee)
+    public function getVenteByAnnee(Request $request, $annee)
     {
         $boutique_id = $this->getBoutiqueId();
+        $targetYear = (int)$annee;
 
-        // Use Inventaire to calculate net stats for the specific year
-        // We filter out inventory entries linked to cancelled sales
-        $mouvements = Inventaire::with(['produit.stock', 'vente'])
+        $dateDebut = $request->query('date_debut');
+        $dateFin = $request->query('date_fin');
+        $mois = $request->query('mois');
+
+        $movQuery = Inventaire::with(['produit.stock', 'vente'])
             ->where('boutique_id', $boutique_id)
-            ->whereYear('date', $annee)
             ->whereNotNull('vente_id')
             ->whereHas('vente', function($q) {
                 $q->whereIn('statut', ['validee', 'payee', 'credit']);
-            })
-            ->get();
+            });
+
+        if ($dateDebut && $dateFin) {
+            $movQuery->whereBetween('date', [$dateDebut, $dateFin]);
+        } elseif ($mois) {
+            $movQuery->whereYear('date', $targetYear)->whereMonth('date', (int)$mois);
+        } else {
+            $movQuery->whereYear('date', $targetYear);
+        }
+
+        $mouvements = $movQuery->get();
 
         $statsMensuelles = [];
         for ($i = 1; $i <= 12; $i++) {
@@ -563,7 +649,7 @@ class VenteController extends Controller
         }
 
         foreach ($mouvements as $mov) {
-            $m = (int)Carbon::parse($mov->date)->month;
+            $m = (int)\Carbon\Carbon::parse($mov->date)->month;
             $pxA = $mov->prix_achat ?? ($mov->produit->stock->prix_achat ?? 0);
             $pxV = $mov->prix_vente ?? ($mov->produit->stock->prix_vente ?? 0);
             
@@ -572,45 +658,113 @@ class VenteController extends Controller
                 $statsMensuelles[$m]['qtv'] += $mov->quantite;
                 $statsMensuelles[$m]['cout_achat'] += ($mov->quantite * $pxA);
             } else {
-                // It's a return (ajout linked to vente_id)
                 $statsMensuelles[$m]['ca'] -= ($mov->quantite * $pxV);
                 $statsMensuelles[$m]['qtv'] -= $mov->quantite;
                 $statsMensuelles[$m]['cout_achat'] -= ($mov->quantite * $pxA);
             }
         }
 
-        $ventesAvecRemise = Vente::where('boutique_id', $boutique_id)
-            ->whereYear('date_vente', $annee)
+        $ventesAvecRemiseQuery = Vente::where('boutique_id', $boutique_id)
             ->where('remise', '>', 0)
-            ->whereIn('statut', ['validee', 'payee', 'credit'])
-            ->get();
+            ->whereIn('statut', ['validee', 'payee', 'credit']);
+
+        if ($dateDebut && $dateFin) {
+            $ventesAvecRemiseQuery->whereBetween('date_vente', [$dateDebut, $dateFin]);
+        } elseif ($mois) {
+            $ventesAvecRemiseQuery->whereYear('date_vente', $targetYear)->whereMonth('date_vente', (int)$mois);
+        } else {
+            $ventesAvecRemiseQuery->whereYear('date_vente', $targetYear);
+        }
+
+        $ventesAvecRemise = $ventesAvecRemiseQuery->get();
 
         foreach ($ventesAvecRemise as $v) {
-            $m = (int)Carbon::parse($v->date_vente)->month;
+            $m = (int)\Carbon\Carbon::parse($v->date_vente)->month;
             $statsMensuelles[$m]['ca'] -= (float)$v->remise;
         }
 
-        $venteList = array_values($statsMensuelles);
-        usort($venteList, function($a, $b) {
-            return $b['mois_num'] - $a['mois_num'];
-        });
+        $moisGlobal = array_values($statsMensuelles);
 
-        // Calculate global stats for this year
+        if ($mois) {
+            $mInt = (int)$mois;
+            $venteList = isset($statsMensuelles[$mInt]) ? [$statsMensuelles[$mInt]] : [];
+        } elseif ($dateDebut && $dateFin) {
+            $startM = (int)\Carbon\Carbon::parse($dateDebut)->month;
+            $endM = (int)\Carbon\Carbon::parse($dateFin)->month;
+            $venteList = [];
+            for ($i = min($startM, $endM); $i <= max($startM, $endM); $i++) {
+                if (isset($statsMensuelles[$i])) {
+                    $venteList[] = $statsMensuelles[$i];
+                }
+            }
+            usort($venteList, function($a, $b) {
+                return $b['mois_num'] - $a['mois_num'];
+            });
+        } else {
+            $venteList = array_values($statsMensuelles);
+            usort($venteList, function($a, $b) {
+                return $b['mois_num'] - $a['mois_num'];
+            });
+        }
+
         $annualStats = [
             'total_ca' => 0,
             'total_qtv' => 0,
-            'total_benefice' => 0
+            'total_benefice' => 0,
+            'total_cout_achat' => 0,
+            'taux_marge' => 0
         ];
 
         foreach ($venteList as $m) {
             $annualStats['total_ca'] += $m['ca'];
             $annualStats['total_qtv'] += $m['qtv'];
+            $annualStats['total_cout_achat'] += $m['cout_achat'];
             $annualStats['total_benefice'] += ($m['ca'] - $m['cout_achat']);
         }
 
+        if ($annualStats['total_ca'] > 0) {
+            $annualStats['taux_marge'] = round(($annualStats['total_benefice'] / $annualStats['total_ca']) * 100, 1);
+        }
+
+        // Years list
+        $anneesBoutique = \App\Models\Annee::where(function ($q) use ($boutique_id) {
+            $q->whereNull('boutique_id')->orWhere('boutique_id', $boutique_id);
+        })->orderBy('annee', 'desc')->get();
+
+        $anneesVentes = Vente::where('boutique_id', $boutique_id)
+            ->whereIn('statut', ['validee', 'payee', 'credit'])
+            ->selectRaw("YEAR(date_vente) as annee, SUM(montant_total) as ca")
+            ->groupByRaw("YEAR(date_vente)")
+            ->get()
+            ->keyBy('annee');
+
+        $allYears = $anneesBoutique->pluck('annee')->merge($anneesVentes->keys())->unique()->sortDesc()->values();
+        if ($allYears->isEmpty()) {
+            $allYears = collect([now()->year]);
+        }
+
+        $parAnnee = [];
+        foreach ($allYears as $y) {
+            $anneeModel = $anneesBoutique->first(function($item) use ($y) {
+                return (int)$item->annee === (int)$y;
+            });
+            $venteModel = $anneesVentes->get((int)$y);
+            $parAnnee[] = [
+                'annee' => (int)$y,
+                'ca' => $venteModel ? (float)$venteModel->ca : 0,
+                'is_active' => $anneeModel ? (bool)$anneeModel->is_active : false,
+            ];
+        }
+
         return response()->json([
+            'par_annee' => $parAnnee,
             'par_mois' => $venteList,
-            'annual_stats' => $annualStats
+            'mois_global' => $moisGlobal,
+            'annual_stats' => $annualStats,
+            'annee_actuelle' => $targetYear,
+            'date_debut' => $dateDebut,
+            'date_fin' => $dateFin,
+            'mois_selectionne' => $mois ? (int)$mois : null
         ], 200);
     }
 

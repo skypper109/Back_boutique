@@ -351,5 +351,16 @@ class SuperAdminController extends Controller
 
         return back()->with('success', "La clé d'activation {$licence->cle_licence} a été révoquée.");
     }
+
+    /**
+     * Supprime définitivement une clé de licence
+     */
+    public function licenceDestroy(Licence $licence)
+    {
+        $cle = $licence->cle_licence;
+        $licence->delete();
+
+        return back()->with('success', "La clé de licence « {$cle} » a été définitivement supprimée.");
+    }
 }
 

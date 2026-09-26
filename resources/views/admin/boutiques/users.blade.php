@@ -1,328 +1,253 @@
 @extends('layouts.admin')
 
 @section('content')
-    <div class="space-y-10">
+    <div class="space-y-10 animate-fade-in">
         <!-- Header Section -->
-        <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 px-4">
-            <div class="flex items-center gap-6">
-                <a href="{{ route('admin.boutiques.index') }}"
-                    class="w-12 h-12 rounded-2xl bg-white border border-slate-200 text-slate-400 hover:bg-slate-900 hover:text-white hover:border-slate-900 flex items-center justify-center transition-all shadow-sm">
-                    <i class="bi bi-arrow-left text-xl"></i>
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-2 border-b border-slate-200/60">
+            <div class="flex items-center gap-5">
+                <a href="{{ route('admin.boutiques.show', $boutique) }}"
+                    class="w-12 h-12 rounded-2xl bg-white border border-slate-200 text-slate-500 hover:text-brand-600 hover:border-brand-300 flex items-center justify-center transition-all shadow-sm group cursor-pointer"
+                    title="Retour à la boutique">
+                    <i class="bi bi-arrow-left text-xl group-hover:-translate-x-1 transition-transform"></i>
                 </a>
                 <div class="space-y-1">
-                    <div
-                        class="inline-flex items-center gap-2 px-3 py-1 bg-primary-50 text-primary-700 rounded-full text-[10px] font-black uppercase tracking-widest mb-1">
+                    <div class="inline-flex items-center gap-2 px-3 py-1 bg-brand-50 text-brand-700 rounded-full text-[10px] font-black uppercase tracking-widest mb-1">
                         <i class="bi bi-shop-window"></i>
                         {{ $boutique->nom }}
                     </div>
-                    <h1 class="text-4xl font-black text-slate-900 tracking-tight">Ressources <span
-                            class="text-primary-600 tracking-tighter italic">Humaines.</span></h1>
-                    <p class="text-slate-500 font-medium tracking-tight">Gestion des accès, des attributions et de la
-                        sécurité du personnel.</p>
+                    <h1 class="text-3xl lg:text-4xl font-black text-slate-900 tracking-tight">
+                        Ressources <span class="text-brand-600">Humaines.</span>
+                    </h1>
+                    <p class="text-slate-500 font-semibold text-xs">
+                        Gestion des comptes employés, attribution des rôles et contrôle des accès sécurité.
+                    </p>
                 </div>
             </div>
-            <div class="flex gap-4">
+            <div class="flex items-center gap-3">
                 <button onclick="document.getElementById('createUserModal').classList.remove('hidden')"
-                    class="btn-action bg-primary-600 text-white shadow-xl shadow-primary-500/20 hover:bg-primary-700">
-                    <i class="bi bi-person-plus-fill text-xl"></i>
+                    class="btn-action bg-brand-600 hover:bg-brand-700 text-white shadow-lg shadow-brand-500/20 text-xs cursor-pointer">
+                    <i class="bi bi-person-plus-fill text-sm"></i>
                     <span>Nouveau Compte</span>
                 </button>
             </div>
         </div>
 
         <!-- Main Table Card -->
-        <div class="glass-card rounded-[2.5rem] overflow-hidden">
-            <div
-                class="p-8 border-b border-slate-100 bg-white/50 backdrop-blur-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <h3 class="font-black text-slate-900 text-sm uppercase tracking-widest flex items-center gap-3">
-                    <i class="bi bi-people-fill text-primary-500 text-lg"></i>
-                    Registre du Personnel
+        <div class="glass-card rounded-[2.5rem] overflow-hidden shadow-card-soft">
+            <div class="p-8 border-b border-slate-100 bg-slate-50/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <h3 class="font-black text-slate-900 text-sm uppercase tracking-wider flex items-center gap-3">
+                    <i class="bi bi-people-fill text-brand-600 text-lg"></i>
+                    Registre du Personnel Affecté ({{ $users->count() }})
                 </h3>
                 <div class="relative group">
-                    <i
-                        class="bi bi-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary-500 transition-colors"></i>
-                    <input type="text" placeholder="Rechercher un membre..."
-                        class="pl-12 pr-6 py-3 bg-slate-100 border-none rounded-2xl text-sm font-semibold w-full md:w-80 focus:ring-4 focus:ring-primary-500/10 focus:bg-white transition-all">
+                    <i class="bi bi-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-brand-600 transition-colors"></i>
+                    <input type="text" id="searchUserInput" onkeyup="filterUsers()" placeholder="Rechercher un membre..."
+                        class="pl-11 pr-5 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-bold w-full md:w-80 focus:ring-2 focus:ring-brand-500 outline-none">
                 </div>
             </div>
 
             <div class="overflow-x-auto">
-                <table class="w-full text-left border-separate border-spacing-y-1">
-                    <thead class="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">
-                        <tr>
-                            <th class="px-8 py-6">Intervenant</th>
-                            <th class="px-8 py-6 text-center">Rôle Attribué</th>
-                            <th class="px-8 py-6 text-center">Status</th>
-                            <th class="px-8 py-6 text-right">Sécurité & Actions</th>
+                <table class="w-full text-left border-collapse" id="usersTable">
+                    <thead>
+                        <tr class="border-b border-slate-100 bg-white text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                            <th class="px-8 py-5">Membre du Personnel</th>
+                            <th class="px-8 py-5 text-center">Rôle Attribué</th>
+                            <th class="px-8 py-5 text-center">Statut d'Accès</th>
+                            <th class="px-8 py-5 text-right">Sécurité & Actions</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-50">
-                        @foreach ($users as $user)
-                            <tr
-                                class="group transition-all hover:bg-slate-50/80 {{ !$user->is_active ? 'opacity-70' : '' }}">
-                                <td class="px-8 py-6">
-                                    <div class="flex items-center gap-5">
+                    <tbody class="divide-y divide-slate-100 bg-white">
+                        @forelse ($users as $user)
+                            <tr class="hover:bg-slate-50/80 transition-colors user-row {{ !$user->is_active ? 'opacity-70' : '' }}">
+                                <td class="px-8 py-5">
+                                    <div class="flex items-center gap-4">
                                         <div class="relative">
-                                            <div
-                                                class="w-12 h-12 rounded-2xl {{ $user->role == 'admin' ? 'bg-primary-50 text-primary-600' : 'bg-slate-100 text-slate-600' }} flex items-center justify-center font-black text-lg group-hover:scale-110 transition-transform duration-300">
+                                            <div class="w-12 h-12 rounded-2xl {{ $user->role == 'admin' ? 'bg-brand-50 text-brand-700' : 'bg-slate-100 text-slate-600' }} flex items-center justify-center font-black text-base shadow-sm">
                                                 {{ substr($user->name, 0, 1) }}
                                             </div>
-                                            <div
-                                                class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-white {{ $user->is_active ? 'bg-emerald-500' : 'bg-slate-300' }}">
-                                            </div>
+                                            <div class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-white {{ $user->is_active ? 'bg-emerald-500' : 'bg-slate-300' }}"></div>
                                         </div>
-                                        <div class="space-y-0.5">
-                                            <p
-                                                class="font-bold text-slate-900 leading-tight group-hover:text-primary-600 transition-colors">
-                                                {{ $user->name }}</p>
-                                            <p class="text-[10px] font-medium text-slate-500">{{ $user->email }}</p>
+                                        <div>
+                                            <p class="font-black text-slate-900 text-xs tracking-tight user-name">{{ $user->name }}</p>
+                                            <p class="text-[11px] font-semibold text-slate-400 mt-0.5">{{ $user->email }}</p>
                                         </div>
                                     </div>
                                 </td>
-                                <td class="px-8 py-6">
-                                    <div class="flex justify-center">
-                                        @php
-                                            $roleColors = [
-                                                'admin' => 'bg-primary-50 text-primary-700 ring-primary-200',
-                                                'gestionnaire' => 'bg-amber-50 text-amber-700 ring-amber-200',
-                                                'comptable' => 'bg-emerald-50 text-emerald-700 ring-emerald-200',
-                                                'vendeur' => 'bg-indigo-50 text-indigo-700 ring-indigo-200',
-                                            ];
-                                            $roleColor =
-                                                $roleColors[$user->role] ??
-                                                'bg-slate-100 text-slate-600 ring-slate-200';
-                                        @endphp
-                                        <span
-                                            class="px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ring-1 {{ $roleColor }}">
-                                            {{ $user->role }}
-                                        </span>
-                                    </div>
-                                </td>
-                                <td class="px-8 py-6">
-                                    <div class="flex justify-center">
-                                        @if ($user->is_active)
-                                            <span
-                                                class="inline-flex items-center gap-2 px-3 py-1 bg-emerald-50 text-emerald-600 text-[10px] font-black uppercase rounded-lg">
-                                                <i class="bi bi-shield-check"></i> Actif
-                                            </span>
-                                        @else
-                                            <span
-                                                class="inline-flex items-center gap-2 px-3 py-1 bg-slate-100 text-slate-500 text-[10px] font-black uppercase rounded-lg">
-                                                <i class="bi bi-shield-slash"></i> Restreint
-                                            </span>
-                                        @endif
-                                    </div>
-                                </td>
-                                <td class="px-8 py-6 text-right">
-                                    <div class="flex items-center justify-end gap-2">
-                                        <!-- Reset Password Button -->
-                                        <button
-                                            onclick="openPasswordModal('{{ $user->id }}', '{{ addslashes($user->name) }}')"
-                                            class="w-10 h-10 rounded-2xl bg-amber-50 text-amber-600 hover:bg-amber-500 hover:text-white flex items-center justify-center transition-all"
-                                            title="Réinitialiser MDP">
-                                            <i class="bi bi-key-fill text-lg"></i>
-                                        </button>
 
-                                        <!-- Toggle Status Button -->
-                                        <form action="{{ route('admin.users.toggle-status', $user->id) }}" method="POST"
-                                            class="inline">
+                                <td class="px-8 py-5 text-center">
+                                    @php
+                                        $roleBadges = [
+                                            'admin' => 'bg-brand-50 text-brand-700 border-brand-200',
+                                            'gestionnaire' => 'bg-amber-50 text-amber-700 border-amber-200',
+                                            'comptable' => 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                                            'vendeur' => 'bg-indigo-50 text-indigo-700 border-indigo-200',
+                                        ];
+                                        $badgeClass = $roleBadges[$user->role] ?? 'bg-slate-100 text-slate-600 border-slate-200';
+                                    @endphp
+                                    <span class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border {{ $badgeClass }}">
+                                        {{ $user->role }}
+                                    </span>
+                                </td>
+
+                                <td class="px-8 py-5">
+                                    <div class="flex justify-center">
+                                        <form action="{{ route('admin.users.toggle-status', $user) }}" method="POST">
                                             @csrf
                                             <button type="submit"
-                                                class="w-10 h-10 rounded-2xl flex items-center justify-center transition-all {{ $user->is_active ? 'bg-slate-100 text-slate-500 hover:bg-slate-900 hover:text-white' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white' }}"
-                                                title="{{ $user->is_active ? 'Désactiver' : 'Activer' }}">
-                                                <i
-                                                    class="bi {{ $user->is_active ? 'bi-lock-fill' : 'bi-unlock-fill' }} text-lg"></i>
+                                                class="flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-all cursor-pointer {{ $user->is_active ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100' : 'bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200' }}"
+                                                title="{{ $user->is_active ? 'Cliquer pour restreindre' : 'Cliquer pour réactiver' }}">
+                                                <i class="bi {{ $user->is_active ? 'bi-shield-check' : 'bi-shield-slash' }} text-xs"></i>
+                                                <span class="text-[10px] font-black uppercase tracking-wider">{{ $user->is_active ? 'Actif' : 'Restreint' }}</span>
                                             </button>
                                         </form>
+                                    </div>
+                                </td>
 
-                                        <!-- Delete Button -->
-                                        <form action="{{ route('admin.users.destroy', $user->id) }}" method="POST"
-                                            class="inline"
-                                            onsubmit="return confirm('ALERTE : Êtes-vous sûr de vouloir supprimer définitivement le compte de {{ addslashes($user->name) }} ? Cette action est irréversible.');">
-                                            @csrf @method('DELETE')
+                                <td class="px-8 py-5 text-right">
+                                    <div class="flex items-center justify-end gap-2">
+                                        <!-- Bouton Réinitialiser Mot de passe -->
+                                        <button onclick="openPasswordModal('{{ $user->id }}', '{{ addslashes($user->name) }}')"
+                                            class="w-9 h-9 rounded-xl bg-slate-100 hover:bg-brand-50 text-slate-500 hover:text-brand-600 flex items-center justify-center transition-colors cursor-pointer"
+                                            title="Réinitialiser le mot de passe">
+                                            <i class="bi bi-key-fill text-xs"></i>
+                                        </button>
+
+                                         <!-- Bouton Supprimer -->
+                                         <form action="{{ route('admin.users.destroy', $user) }}" method="POST"
+                                             onsubmit="return triggerDeleteConfirm(event, 'Supprimer le collaborateur', 'Voulez-vous vraiment supprimer définitivement le compte de {{ addslashes($user->name) }} ({{ addslashes($user->email) }}) ?');">
+                                             @csrf
+                                             @method('DELETE')
                                             <button type="submit"
-                                                class="w-10 h-10 rounded-2xl bg-rose-50 text-rose-500 hover:bg-rose-500 hover:text-white flex items-center justify-center transition-all"
-                                                title="Supprimer">
-                                                <i class="bi bi-trash-fill text-lg"></i>
+                                                class="w-9 h-9 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-500 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+                                                title="Supprimer définitivement">
+                                                <i class="bi bi-trash3-fill text-xs"></i>
                                             </button>
                                         </form>
                                     </div>
                                 </td>
                             </tr>
-                        @endforeach
+                        @empty
+                            <tr>
+                                <td colspan="4" class="text-center py-20 bg-white">
+                                    <i class="bi bi-people text-4xl text-slate-300 block mb-3"></i>
+                                    <p class="text-slate-400 text-sm font-semibold">Aucun membre du personnel enregistré pour cette boutique.</p>
+                                </td>
+                            </tr>
+                        @endforelse
                     </tbody>
                 </table>
             </div>
-            @if ($users->hasPages())
-                <div class="p-6 border-t border-slate-100 bg-slate-50/50">
-                    {{ $users->links() }}
-                </div>
-            @endif
         </div>
     </div>
 
-    <!-- Modal: Nouveau Personnel -->
+    <!-- Modal 1 : Créer Utilisateur -->
     <div id="createUserModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-6 sm:p-10">
-        <div class="absolute inset-0 bg-slate-950/40 backdrop-blur-xl animate-in fade-in duration-300"
-            onclick="this.parentElement.classList.add('hidden')"></div>
-
-        <div
-            class="relative w-full max-w-xl glass-card rounded-[3rem] p-10 shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-10 duration-500">
-            <div class="flex items-center justify-between mb-10">
-                <div class="space-y-1">
-                    <h2 class="text-3xl font-black text-slate-900 tracking-tight leading-none">Nouveau <span
-                            class="text-primary-600 italic tracking-tighter">Collaborateur.</span></h2>
-                    <p class="text-slate-500 font-medium tracking-tight">Créez un profil pour l'établissement
-                        {{ $boutique->nom }}.</p>
-                </div>
-                <button onclick="document.getElementById('createUserModal').classList.add('hidden')"
-                    class="w-12 h-12 rounded-3xl bg-slate-100 text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-all">
-                    <i class="bi bi-x-lg text-xl"></i>
-                </button>
-            </div>
-
-            <form action="{{ route('admin.boutiques.users.store', $boutique->id) }}" method="POST" class="space-y-6">
-                @csrf
-
-                <!-- Nom -->
-                <div class="space-y-2">
-                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2">Nom Complet</label>
-                    <div class="relative">
-                        <i class="bi bi-person absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
-                        <input type="text" name="name" required placeholder="Ex: Jean Dupont"
-                            class="w-full pl-12 pr-6 py-4 bg-slate-50 border-2 border-transparent rounded-2xl text-sm font-bold focus:bg-white focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all outline-none">
+        <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-md" onclick="document.getElementById('createUserModal').classList.add('hidden')"></div>
+        <div class="relative w-full max-w-md bg-white rounded-[2.5rem] p-8 shadow-2xl border border-slate-100">
+            <div class="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-2xl bg-brand-50 text-brand-600 flex items-center justify-center">
+                        <i class="bi bi-person-plus-fill text-lg"></i>
                     </div>
+                    <h3 class="text-xl font-black text-slate-900 tracking-tight">Nouveau Membre</h3>
                 </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <!-- Email -->
-                    <div class="space-y-2">
-                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2">Email de
-                            connexion</label>
-                        <div class="relative">
-                            <i class="bi bi-envelope absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
-                            <input type="email" name="email" required placeholder="user@maboutique.com"
-                                class="w-full pl-12 pr-6 py-4 bg-slate-50 border-2 border-transparent rounded-2xl text-sm font-bold focus:bg-white focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all outline-none">
-                        </div>
-                    </div>
-
-                    <!-- Mot de passe -->
-                    <div class="space-y-2">
-                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2">Mot de passe
-                            temporaire</label>
-                        <div class="relative">
-                            <i class="bi bi-key absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
-                            <input type="password" name="password" required placeholder="••••••••"
-                                class="w-full pl-12 pr-6 py-4 bg-slate-50 border-2 border-transparent rounded-2xl text-sm font-bold focus:bg-white focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all outline-none">
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Rôle -->
-                <div class="space-y-2">
-                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2">Niveau d'Accès
-                        (Rôle)</label>
-                    <div class="relative">
-                        <i class="bi bi-shield-check absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
-                        <select name="role" required
-                            class="w-full pl-12 pr-6 py-4 bg-slate-50 border-2 border-transparent rounded-2xl text-sm font-bold focus:bg-white focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10 transition-all outline-none appearance-none">
-                            <option value="vendeur">Vendeur (Front-office & Caisse)</option>
-                            <option value="gestionnaire">Gestionnaire (Back-office & Stocks)</option>
-                            <option value="comptable">Comptable (Finances & Rapports)</option>
-                            <option value="admin">Administrateur Boutique (Contrôle total local)</option>
-                        </select>
-                        <i
-                            class="bi bi-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"></i>
-                    </div>
-                </div>
-
-                <div class="pt-6 border-t border-slate-100 flex items-center justify-end gap-4 mt-8">
-                    <button type="button" onclick="document.getElementById('createUserModal').classList.add('hidden')"
-                        class="px-8 py-4 rounded-2xl font-black text-slate-400 hover:text-slate-900 transition-colors">
-                        Annuler
-                    </button>
-                    <button type="submit"
-                        class="btn-action bg-primary-600 text-white shadow-xl shadow-primary-500/20 px-8">
-                        <i class="bi bi-check-lg text-xl"></i>
-                        Créer le Profil
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Modal: Réinitialisation MDP -->
-    <div id="passwordModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-6 sm:p-10">
-        <div class="absolute inset-0 bg-slate-950/40 backdrop-blur-xl animate-in fade-in duration-300"
-            onclick="this.parentElement.classList.add('hidden')"></div>
-
-        <div
-            class="relative w-full max-w-lg glass-card rounded-[3rem] p-10 shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-10 duration-500">
-            <div class="flex items-center justify-between mb-8">
-                <div
-                    class="w-14 h-14 rounded-3xl bg-amber-50 text-amber-500 flex items-center justify-center text-2xl shadow-inner">
-                    <i class="bi bi-shield-lock-fill"></i>
-                </div>
-                <button onclick="document.getElementById('passwordModal').classList.add('hidden')"
-                    class="w-10 h-10 rounded-2xl bg-slate-100 text-slate-400 hover:bg-slate-200 transition-all">
+                <button onclick="document.getElementById('createUserModal').classList.add('hidden')" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center cursor-pointer">
                     <i class="bi bi-x-lg"></i>
                 </button>
             </div>
 
-            <div class="mb-8 space-y-2">
-                <h2 class="text-2xl font-black text-slate-900 tracking-tight">Réinitialisation <span
-                        class="text-amber-500">Sécurité.</span></h2>
-                <p id="modalSubtitle" class="text-slate-500 font-medium text-sm">Nouveau mot de passe pour le compte
-                    sélectionné.</p>
-            </div>
-
-            <form id="passwordForm" method="POST" class="space-y-6">
+            <form action="{{ route('admin.boutiques.users.store', $boutique) }}" method="POST" class="space-y-4">
                 @csrf
-                <div class="space-y-5">
-                    <div class="space-y-2">
-                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2">Nouveau mot de
-                            passe</label>
-                        <div class="relative">
-                            <i class="bi bi-key absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
-                            <input type="password" name="password" required placeholder="••••••••"
-                                class="w-full pl-12 pr-6 py-4 bg-slate-50 border-2 border-transparent rounded-2xl text-sm font-bold focus:bg-white focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10 transition-all outline-none">
-                        </div>
-                    </div>
-
-                    <div class="space-y-2">
-                        <label
-                            class="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2">Confirmation</label>
-                        <div class="relative">
-                            <i class="bi bi-check-all absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
-                            <input type="password" name="password_confirmation" required placeholder="••••••••"
-                                class="w-full pl-12 pr-6 py-4 bg-slate-50 border-2 border-transparent rounded-2xl text-sm font-bold focus:bg-white focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10 transition-all outline-none">
-                        </div>
-                    </div>
+                <div>
+                    <label class="block text-xs font-black uppercase tracking-widest text-slate-400 mb-2">Nom Complet</label>
+                    <input type="text" name="name" required placeholder="ex: Amadou Diallo" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none">
                 </div>
 
-                <div class="pt-6 border-t border-slate-100 flex items-center justify-end gap-3 mt-8">
-                    <button type="button" onclick="document.getElementById('passwordModal').classList.add('hidden')"
-                        class="px-6 py-3 rounded-2xl font-bold text-slate-400 hover:text-slate-900 transition-colors">
-                        Fermer
-                    </button>
-                    <button type="submit"
-                        class="btn-action bg-slate-900 text-white shadow-xl shadow-slate-900/20 px-8 hover:bg-slate-800">
-                        Verrouiller
-                    </button>
+                <div>
+                    <label class="block text-xs font-black uppercase tracking-widest text-slate-400 mb-2">Adresse E-mail</label>
+                    <input type="email" name="email" required placeholder="amadou@boutique.com" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-black uppercase tracking-widest text-slate-400 mb-2">Rôle Attribué</label>
+                    <select name="role" required class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none">
+                        <option value="vendeur">Vendeur / Caissier</option>
+                        <option value="comptable">Comptable</option>
+                        <option value="gestionnaire">Gestionnaire de Stock</option>
+                        <option value="admin">Administrateur Boutique</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-black uppercase tracking-widest text-slate-400 mb-2">Mot de Passe Initial</label>
+                    <input type="password" name="password" required placeholder="••••••••" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none">
+                </div>
+
+                <div class="pt-4 flex justify-end gap-3 border-t border-slate-100">
+                    <button type="button" onclick="document.getElementById('createUserModal').classList.add('hidden')" class="px-5 py-2.5 font-bold text-xs text-slate-500 hover:text-slate-900 cursor-pointer">Annuler</button>
+                    <button type="submit" class="btn-action bg-brand-600 hover:bg-brand-700 text-white text-xs">Créer le Compte</button>
                 </div>
             </form>
         </div>
     </div>
 
+    <!-- Modal 2 : Réinitialiser Mot de passe -->
+    <div id="passwordModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-6 sm:p-10">
+        <div class="absolute inset-0 bg-slate-950/60 backdrop-blur-md" onclick="closePasswordModal()"></div>
+        <div class="relative w-full max-w-md bg-white rounded-[2.5rem] p-8 shadow-2xl border border-slate-100">
+            <div class="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                        <i class="bi bi-key-fill text-lg"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-black text-slate-900 tracking-tight">Modifier Mot de Passe</h3>
+                        <p class="text-[11px] font-bold text-slate-400" id="passwordModalUserName"></p>
+                    </div>
+                </div>
+                <button onclick="closePasswordModal()" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center cursor-pointer">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            </div>
+
+            <form id="passwordForm" method="POST" action="" class="space-y-4">
+                @csrf
+                <div>
+                    <label class="block text-xs font-black uppercase tracking-widest text-slate-400 mb-2">Nouveau Mot de Passe</label>
+                    <input type="password" name="password" required placeholder="Minimum 6 caractères" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none">
+                </div>
+
+                <div class="pt-4 flex justify-end gap-3 border-t border-slate-100">
+                    <button type="button" onclick="closePasswordModal()" class="px-5 py-2.5 font-bold text-xs text-slate-500 hover:text-slate-900 cursor-pointer">Annuler</button>
+                    <button type="submit" class="btn-action bg-amber-600 hover:bg-amber-700 text-white text-xs">Mettre à Jour</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Scripts -->
     <script>
         function openPasswordModal(userId, userName) {
-            const modal = document.getElementById('passwordModal');
-            const form = document.getElementById('passwordForm');
-            const subtitle = document.getElementById('modalSubtitle');
+            document.getElementById('passwordModalUserName').textContent = userName;
+            document.getElementById('passwordForm').action = `/admin/users/${userId}/update-password`;
+            document.getElementById('passwordModal').classList.remove('hidden');
+        }
 
-            form.action = `/admin/users/${userId}/update-password`;
-            subtitle.innerHTML = `Nouveau mot de passe pour <strong>${userName}</strong>.`;
-            modal.classList.remove('hidden');
+        function closePasswordModal() {
+            document.getElementById('passwordModal').classList.add('hidden');
+        }
+
+        function filterUsers() {
+            const input = document.getElementById('searchUserInput').value.toLowerCase();
+            const rows = document.querySelectorAll('.user-row');
+            rows.forEach(row => {
+                const name = row.querySelector('.user-name')?.textContent.toLowerCase() || '';
+                if (name.includes(input)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
         }
     </script>
 @endsection

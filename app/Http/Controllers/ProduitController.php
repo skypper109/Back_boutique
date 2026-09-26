@@ -69,14 +69,25 @@ class ProduitController extends Controller
 
         foreach ($request->produits as $produit) {
             $produitId = $produit['produit_id'];
-            $quantite = $produit['quantite'];
-            $prix_achat = $produit['prix_achat'];
-            $prix_vente = $produit['prix_vente'];
-            $prod = $produit['produit'];
-            // $description = $produit['description'];
+            $quantite = isset($produit['quantite']) ? floatval($produit['quantite']) : 0;
+            if ($quantite <= 0) {
+                continue;
+            }
+
+            $prod = $produit['produit'] ?? '';
+
+            // Pour la mise a jour dans la table stock :
+            $stock = Stock::where('produit_id', $produitId)->where('boutique_id', $boutique_id)->first();
+
+            $prix_achat = (isset($produit['prix_achat']) && floatval($produit['prix_achat']) > 0)
+                ? floatval($produit['prix_achat'])
+                : ($stock ? floatval($stock->prix_achat) : 0);
+
+            $prix_vente = (isset($produit['prix_vente']) && floatval($produit['prix_vente']) > 0)
+                ? floatval($produit['prix_vente'])
+                : ($stock ? floatval($stock->prix_vente) : 0);
 
             // L'enregistrement dans la table Inventaire :
-
             Inventaire::create([
                 'produit_id' => $produitId,
                 'boutique_id' => $boutique_id,
@@ -90,8 +101,6 @@ class ProduitController extends Controller
                 'date' => now()->format('Y-m-d')
             ]);
 
-            // Pour la mise a jour dans la table stock :
-            $stock = Stock::where('produit_id', $produitId)->where('boutique_id', $boutique_id)->first();
             if ($stock) {
                 $stock->update([
                     'quantite' => $stock->quantite + $quantite,

@@ -20,16 +20,28 @@ class ComptaService
      */
     public function getCompte(string $numero, ?int $boutiqueId = null): ?CompteComptable
     {
+        $clean = rtrim($numero, '0');
+        $candidates = array_unique(array_filter([
+            $numero,
+            $clean,
+            $clean . '000',
+            $clean . '100',
+            strlen($numero) === 3 ? $numero . '1' : null,
+            strlen($numero) === 3 ? $numero . '100' : null,
+            substr($numero, 0, 4),
+            substr($numero, 0, 3)
+        ]));
+
         $compte = null;
         if ($boutiqueId) {
-            $compte = CompteComptable::where('numero', $numero)
+            $compte = CompteComptable::whereIn('numero', $candidates)
                 ->where('boutique_id', $boutiqueId)
                 ->where('is_active', true)
                 ->first();
         }
 
         if (!$compte) {
-            $compte = CompteComptable::where('numero', $numero)
+            $compte = CompteComptable::whereIn('numero', $candidates)
                 ->whereNull('boutique_id')
                 ->where('is_active', true)
                 ->first();
@@ -94,12 +106,25 @@ class ComptaService
             throw new \Exception("Journal comptable '{$journalCode}' introuvable.");
         }
 
-        // Vérifier l'équilibre Débit / Crédit
+        // Vérifier l'équilibre Débit / Crédit et la validité des lignes
         $totalDebit = 0;
         $totalCredit = 0;
-        foreach ($lignes as $ligne) {
-            $totalDebit += (float) ($ligne['debit'] ?? 0);
-            $totalCredit += (float) ($ligne['credit'] ?? 0);
+        foreach ($lignes as $idx => $ligne) {
+            $deb = (float) ($ligne['debit'] ?? 0);
+            $cred = (float) ($ligne['credit'] ?? 0);
+
+            if ($deb < 0 || $cred < 0) {
+                throw new \Exception("Ligne #" . ($idx + 1) . " : Les montants comptables ne peuvent pas être négatifs.");
+            }
+            if ($deb > 0 && $cred > 0) {
+                throw new \Exception("Ligne #" . ($idx + 1) . " : Une ligne comptable doit être exclusivement au débit ou au crédit, jamais les deux.");
+            }
+            if ($deb == 0 && $cred == 0) {
+                throw new \Exception("Ligne #" . ($idx + 1) . " : Le montant débit ou crédit doit être supérieur à zéro.");
+            }
+
+            $totalDebit += $deb;
+            $totalCredit += $cred;
         }
 
         if (abs($totalDebit - $totalCredit) > 0.01) {
@@ -137,6 +162,11 @@ class ComptaService
                     throw new \Exception("Compte comptable introuvable pour la ligne : " . json_encode($ligne));
                 }
 
+                // Sécurité multi-tenant : vérifier que le compte appartient soit au plan système soit à la boutique
+                if ($compte->boutique_id !== null && (int)$compte->boutique_id !== (int)$boutiqueId) {
+                    throw new \Exception("Accès non autorisé : Le compte '{$compte->numero}' n'appartient pas à cette boutique.");
+                }
+
                 LigneEcriture::create([
                     'ecriture_id' => $ecriture->id,
                     'compte_id' => $compte->id,
@@ -169,16 +199,16 @@ class ComptaService
             $libelle = "Vente #" . $vente->id . ($vente->client ? " - " . $vente->client->nom : "");
 
             if ($vente->type_paiement === 'credit') {
-                // Vente à crédit : Débit 411100 (Client), Crédit 701100 (Vente)
+                // Vente à crédit : Débit 411 (Client), Crédit 701 (Vente)
                 $lignes = [
                     [
-                        'numero' => '411100', // Clients
+                        'numero' => '411', // Clients
                         'debit' => $montant,
                         'credit' => 0,
                         'libelle' => $libelle . " (Créance)",
                     ],
                     [
-                        'numero' => '701100', // Ventes de marchandises
+                        'numero' => '701', // Ventes de marchandises
                         'debit' => 0,
                         'credit' => $montant,
                         'libelle' => $libelle,
@@ -201,13 +231,13 @@ class ComptaService
                 if ($avance > 0) {
                     $lignesAvance = [
                         [
-                            'numero' => '571100', // Caisse
+                            'numero' => '571', // Caisse
                             'debit' => $avance,
                             'credit' => 0,
                             'libelle' => "Avance/Acompte Vente #" . $vente->id,
                         ],
                         [
-                            'numero' => '411100', // Clients
+                            'numero' => '411', // Clients
                             'debit' => 0,
                             'credit' => $avance,
                             'libelle' => "Règlement acompte Vente #" . $vente->id,
@@ -226,16 +256,16 @@ class ComptaService
                     );
                 }
             } elseif ($vente->type_paiement !== 'proforma') {
-                // Vente au comptant : Débit 571100 (Caisse), Crédit 701100 (Vente)
+                // Vente au comptant : Débit 571 (Caisse), Crédit 701 (Vente)
                 $lignes = [
                     [
-                        'numero' => '571100', // Caisse principale
+                        'numero' => '571', // Caisse principale
                         'debit' => $montant,
                         'credit' => 0,
                         'libelle' => $libelle,
                     ],
                     [
-                        'numero' => '701100', // Ventes de marchandises
+                        'numero' => '701', // Ventes de marchandises
                         'debit' => 0,
                         'credit' => $montant,
                         'libelle' => $libelle,
@@ -273,10 +303,19 @@ class ComptaService
 
             $montant = (float) $vente->montant_total;
             if ($montant <= 0) {
-                // S'il n'y a pas de montant sur la vente actuelle (déjà mis à 0 par le code appelant avant ce hook par ex),
-                // on devrait récupérer l'ancienne écriture ou le montant total initial.
-                // Dans le contrôleur, il passe le montant à 0 APRÈS.
-                // Donc s'il est > 0, on continue, sinon on retourne pour éviter une erreur.
+                // Si le montant de la vente a déjà été mis à 0 par le contrôleur, on récupère le montant de l'écriture initiale
+                $origEcriture = EcritureComptable::where('source_type', 'Vente')
+                    ->where('source_id', $vente->id)
+                    ->with('lignes')
+                    ->first();
+                if ($origEcriture && $origEcriture->lignes->count() > 0) {
+                    $montant = (float) $origEcriture->lignes->sum('debit');
+                }
+            }
+
+            if ($montant <= 0) {
+                Log::warning("ComptaService::enregistrerAnnulationVente: Impossible d'annuler la vente #{$vente->id}, montant nul ou écriture introuvable.");
+                return;
             }
 
             $date = date('Y-m-d');
@@ -285,13 +324,13 @@ class ComptaService
             if ($vente->type_paiement === 'credit') {
                 $lignes = [
                     [
-                        'numero' => '701100', // Ventes de marchandises
+                        'numero' => '701', // Ventes de marchandises
                         'debit' => $montant,
                         'credit' => 0,
                         'libelle' => $libelle,
                     ],
                     [
-                        'numero' => '411100', // Clients
+                        'numero' => '411', // Clients
                         'debit' => 0,
                         'credit' => $montant,
                         'libelle' => $libelle . " (Créance annulée)",
@@ -312,13 +351,13 @@ class ComptaService
             } else {
                 $lignes = [
                     [
-                        'numero' => '701100', // Ventes de marchandises
+                        'numero' => '701', // Ventes de marchandises
                         'debit' => $montant,
                         'credit' => 0,
                         'libelle' => $libelle,
                     ],
                     [
-                        'numero' => '571100', // Caisse
+                        'numero' => '571', // Caisse
                         'debit' => 0,
                         'credit' => $montant,
                         'libelle' => $libelle,
@@ -362,13 +401,13 @@ class ComptaService
 
             $lignes = [
                 [
-                    'numero' => '571100', // Caisse
+                    'numero' => '571', // Caisse
                     'debit' => $montant,
                     'credit' => 0,
                     'libelle' => $libelle,
                 ],
                 [
-                    'numero' => '411100', // Clients
+                    'numero' => '411', // Clients
                     'debit' => 0,
                     'credit' => $montant,
                     'libelle' => $libelle,
@@ -410,22 +449,22 @@ class ComptaService
 
             // Déterminer le compte de charge SYSCOHADA approprié selon le type
             $typeClean = mb_strtolower($expense->type ?? '');
-            $compteCharge = '658000'; // Par défaut : Autres charges d'exploitation
+            $compteCharge = '658'; // Par défaut : Autres charges d'exploitation
 
             if (str_contains($typeClean, 'loyer')) {
-                $compteCharge = '622000'; // Locations et charges locatives
+                $compteCharge = '622'; // Locations et charges locatives
             } elseif (str_contains($typeClean, 'eau') || str_contains($typeClean, 'electr') || str_contains($typeClean, 'carburant')) {
-                $compteCharge = '605100'; // Électricité, eau, carburant
+                $compteCharge = '605'; // Électricité, eau, carburant
             } elseif (str_contains($typeClean, 'salaire') || str_contains($typeClean, 'personnel')) {
-                $compteCharge = '661000'; // Salaires du personnel
+                $compteCharge = '661'; // Salaires du personnel
             } elseif (str_contains($typeClean, 'transport') || str_contains($typeClean, 'livraison')) {
-                $compteCharge = '612000'; // Transports
+                $compteCharge = '612'; // Transports
             } elseif (str_contains($typeClean, 'entretien') || str_contains($typeClean, 'repar')) {
-                $compteCharge = '624000'; // Entretien et réparations
+                $compteCharge = '624'; // Entretien et réparations
             } elseif (str_contains($typeClean, 'internet') || str_contains($typeClean, 'telephon')) {
-                $compteCharge = '628000'; // Téléphone et Internet
+                $compteCharge = '628'; // Téléphone et Internet
             } elseif (str_contains($typeClean, 'fourniture')) {
-                $compteCharge = '605200'; // Fournitures de bureau
+                $compteCharge = '6052'; // Fournitures de bureau
             }
             $libelle = "Dépense : " . ($expense->type ?? 'Générale') . ($expense->description ? " - " . $expense->description : "");
 
@@ -437,7 +476,7 @@ class ComptaService
                     'libelle' => $libelle,
                 ],
                 [
-                    'numero' => '571100', // Caisse
+                    'numero' => '571', // Caisse
                     'debit' => 0,
                     'credit' => $montant,
                     'libelle' => $libelle,
@@ -477,28 +516,28 @@ class ComptaService
 
             $date = date('Y-m-d');
             $typeClean = mb_strtolower($expense->type ?? '');
-            $compteCharge = '658000'; // Par défaut : Autres charges d'exploitation
+            $compteCharge = '658'; // Par défaut : Autres charges d'exploitation
 
             if (str_contains($typeClean, 'loyer')) {
-                $compteCharge = '622000';
+                $compteCharge = '622';
             } elseif (str_contains($typeClean, 'eau') || str_contains($typeClean, 'electr') || str_contains($typeClean, 'carburant')) {
-                $compteCharge = '605100';
+                $compteCharge = '605';
             } elseif (str_contains($typeClean, 'salaire') || str_contains($typeClean, 'personnel')) {
-                $compteCharge = '661000';
+                $compteCharge = '661';
             } elseif (str_contains($typeClean, 'transport') || str_contains($typeClean, 'livraison')) {
-                $compteCharge = '612000';
+                $compteCharge = '612';
             } elseif (str_contains($typeClean, 'entretien') || str_contains($typeClean, 'repar')) {
-                $compteCharge = '624000';
+                $compteCharge = '624';
             } elseif (str_contains($typeClean, 'internet') || str_contains($typeClean, 'telephon')) {
-                $compteCharge = '628000';
+                $compteCharge = '628';
             } elseif (str_contains($typeClean, 'fourniture')) {
-                $compteCharge = '605200';
+                $compteCharge = '6052';
             }
             $libelle = "Annulation Dépense : " . ($expense->type ?? 'Générale');
 
             $lignes = [
                 [
-                    'numero' => '571100', // Caisse (On remet l'argent)
+                    'numero' => '571', // Caisse (On remet l'argent)
                     'debit' => $montant,
                     'credit' => 0,
                     'libelle' => $libelle,
@@ -551,16 +590,16 @@ class ComptaService
             $detailStr = count($itemsNames) > 0 ? ": " . implode(', ', array_slice($itemsNames, 0, 3)) : "";
             $libelle = "Réapprovisionnement stock" . $detailStr;
 
-            // Débit 601100 (Achats de marchandises), Crédit 571100 (Caisse)
+            // Débit 601 (Achats de marchandises), Crédit 571 (Caisse)
             $lignes = [
                 [
-                    'numero' => '601100', // Achats de marchandises
+                    'numero' => '601', // Achats de marchandises
                     'debit' => $totalAchats,
                     'credit' => 0,
                     'libelle' => $libelle,
                 ],
                 [
-                    'numero' => '571100', // Caisse
+                    'numero' => '571', // Caisse
                     'debit' => 0,
                     'credit' => $totalAchats,
                     'libelle' => $libelle,
@@ -596,32 +635,32 @@ class ComptaService
             $date = date('Y-m-d');
 
             if ($sens === 'perte' || $sens === 'manquant') {
-                // Perte / Manquant sur stock : Débit 603100 (Variation stocks) / Crédit 311000 (Marchandises)
+                // Perte / Manquant sur stock : Débit 603 (Variation stocks) / Crédit 311 (Marchandises)
                 $lignes = [
                     [
-                        'numero' => '603100', // Variation des stocks de marchandises
+                        'numero' => '603', // Variation des stocks de marchandises
                         'debit' => $montant,
                         'credit' => 0,
                         'libelle' => $libelle . " (Perte/Manquant)",
                     ],
                     [
-                        'numero' => '311000', // Marchandises
+                        'numero' => '311', // Marchandises
                         'debit' => 0,
                         'credit' => $montant,
                         'libelle' => $libelle,
                     ],
                 ];
             } else {
-                // Surplus d'inventaire : Débit 311000 (Marchandises) / Crédit 603100 (Variation stocks)
+                // Surplus d'inventaire : Débit 311 (Marchandises) / Crédit 603 (Variation stocks)
                 $lignes = [
                     [
-                        'numero' => '311000', // Marchandises
+                        'numero' => '311', // Marchandises
                         'debit' => $montant,
                         'credit' => 0,
                         'libelle' => $libelle,
                     ],
                     [
-                        'numero' => '603100', // Variation des stocks de marchandises
+                        'numero' => '603', // Variation des stocks de marchandises
                         'debit' => 0,
                         'credit' => $montant,
                         'libelle' => $libelle . " (Surplus)",
@@ -713,41 +752,41 @@ class ComptaService
 
     /**
      * Générer la Balance Générale SYSCOHADA (6 colonnes : Cumul Débit, Cumul Crédit, Solde Débiteur, Solde Créditeur)
+     * Isolation multi-tenant stricte : seuls les mouvements de la boutique spécifiée sont agrégés.
      */
     public function getBalanceGenerale(int $boutiqueId, ?string $dateDebut = null, ?string $dateFin = null): array
     {
-        $query = DB::table('comptes_comptables as c')
-            ->leftJoin('lignes_ecritures as l', 'l.compte_id', '=', 'c.id')
-            ->leftJoin('ecritures_comptables as e', function ($join) use ($boutiqueId, $dateDebut, $dateFin) {
-                $join->on('e.id', '=', 'l.ecriture_id')
-                    ->where('e.boutique_id', '=', $boutiqueId);
+        // 1. Agréger les mouvements strictement pour cette boutique et dans la période
+        $mouvementsQuery = DB::table('lignes_ecritures as l')
+            ->join('ecritures_comptables as e', 'e.id', '=', 'l.ecriture_id')
+            ->where('e.boutique_id', '=', $boutiqueId)
+            ->where('e.statut', '=', 'validee');
 
-                if ($dateDebut) {
-                    $join->where('e.date_ecriture', '>=', $dateDebut);
-                }
-                if ($dateFin) {
-                    $join->where('e.date_ecriture', '<=', $dateFin);
-                }
-            })
-            ->where(function ($q) use ($boutiqueId) {
-                $q->whereNull('c.boutique_id')
-                  ->orWhere('c.boutique_id', $boutiqueId);
-            })
-            ->where('c.is_active', true)
+        if ($dateDebut) {
+            $mouvementsQuery->where('e.date_ecriture', '>=', $dateDebut);
+        }
+        if ($dateFin) {
+            $mouvementsQuery->where('e.date_ecriture', '<=', $dateFin);
+        }
+
+        $mouvements = $mouvementsQuery
             ->select(
-                'c.id',
-                'c.numero',
-                'c.libelle',
-                'c.classe',
-                'c.type',
-                'c.sens_normal',
+                'l.compte_id',
                 DB::raw('COALESCE(SUM(l.debit), 0) as total_debit'),
                 DB::raw('COALESCE(SUM(l.credit), 0) as total_credit')
             )
-            ->groupBy('c.id', 'c.numero', 'c.libelle', 'c.classe', 'c.type', 'c.sens_normal')
-            ->orderBy('c.numero', 'asc');
+            ->groupBy('l.compte_id')
+            ->get()
+            ->keyBy('compte_id');
 
-        $rawComptes = $query->get();
+        // 2. Charger les comptes autorisés (système ou créés par la boutique)
+        $comptes = CompteComptable::where(function ($q) use ($boutiqueId) {
+                $q->whereNull('boutique_id')
+                  ->orWhere('boutique_id', $boutiqueId);
+            })
+            ->where('is_active', true)
+            ->orderBy('numero', 'asc')
+            ->get();
 
         $balance = [];
         $sumDebit = 0;
@@ -755,16 +794,16 @@ class ComptaService
         $sumSoldeDebiteur = 0;
         $sumSoldeCrediteur = 0;
 
-        foreach ($rawComptes as $c) {
-            $debit = (float) $c->total_debit;
-            $credit = (float) $c->total_credit;
-            $diff = $debit - $credit;
+        foreach ($comptes as $c) {
+            $mvt = $mouvements->get($c->id);
+            $debit = $mvt ? (float) $mvt->total_debit : 0;
+            $credit = $mvt ? (float) $mvt->total_credit : 0;
 
-            $soldeDebiteur = $diff > 0 ? $diff : 0;
-            $soldeCrediteur = $diff < 0 ? abs($diff) : 0;
-
-            // N'inclure que les comptes mouvementés ou de classe clé
             if ($debit > 0 || $credit > 0) {
+                $diff = $debit - $credit;
+                $soldeDebiteur = $diff > 0 ? $diff : 0;
+                $soldeCrediteur = $diff < 0 ? abs($diff) : 0;
+
                 $balance[] = [
                     'compte_id' => $c->id,
                     'numero' => $c->numero,
@@ -801,13 +840,14 @@ class ComptaService
     }
 
     /**
-     * Générer le Grand Livre SYSCOHADA (mouvements compte par compte avec solde progressif)
+     * Générer le Grand Livre SYSCOHADA (mouvements compte par compte avec solde progressif et report à nouveau)
      */
     public function getGrandLivre(int $boutiqueId, ?string $dateDebut = null, ?string $dateFin = null, ?int $compteId = null): array
     {
         $query = LigneEcriture::with(['ecriture.journal', 'compte'])
             ->whereHas('ecriture', function ($q) use ($boutiqueId, $dateDebut, $dateFin) {
-                $q->where('boutique_id', $boutiqueId);
+                $q->where('boutique_id', $boutiqueId)
+                  ->where('statut', 'validee');
                 if ($dateDebut) $q->where('date_ecriture', '>=', $dateDebut);
                 if ($dateFin) $q->where('date_ecriture', '<=', $dateFin);
             });
@@ -828,17 +868,53 @@ class ComptaService
 
         foreach ($grouped as $cId => $mouvements) {
             $compte = $mouvements->first()->compte;
-            $solde = 0;
+
+            // Calcul du Solde Initial / Report à nouveau si un filtre date_debut est appliqué
+            $soldeInitial = 0;
+            if ($dateDebut) {
+                $mvtAvant = DB::table('lignes_ecritures as l')
+                    ->join('ecritures_comptables as e', 'e.id', '=', 'l.ecriture_id')
+                    ->where('e.boutique_id', '=', $boutiqueId)
+                    ->where('e.statut', '=', 'validee')
+                    ->where('e.date_ecriture', '<', $dateDebut)
+                    ->where('l.compte_id', '=', $cId)
+                    ->select(
+                        DB::raw('COALESCE(SUM(l.debit), 0) as total_deb'),
+                        DB::raw('COALESCE(SUM(l.credit), 0) as total_cred')
+                    )
+                    ->first();
+
+                if ($mvtAvant) {
+                    $soldeInitial = (float) ($mvtAvant->total_deb - $mvtAvant->total_cred);
+                }
+            }
+
+            $solde = $soldeInitial;
             $mouvementsArray = [];
+
+            if ($soldeInitial != 0) {
+                $mouvementsArray[] = [
+                    'id' => 0,
+                    'date' => $dateDebut,
+                    'numero_piece' => 'RAN',
+                    'journal' => 'RAN',
+                    'libelle' => 'Report à nouveau (Solde initial)',
+                    'debit' => $soldeInitial > 0 ? $soldeInitial : 0,
+                    'credit' => $soldeInitial < 0 ? abs($soldeInitial) : 0,
+                    'solde_progressif' => $solde,
+                ];
+            }
 
             foreach ($mouvements as $m) {
                 $debit = (float) $m->debit;
                 $credit = (float) $m->credit;
                 $solde += ($debit - $credit);
 
+                $dateEcr = $m->ecriture->date_ecriture ? Carbon::parse($m->ecriture->date_ecriture)->format('Y-m-d') : date('Y-m-d');
+
                 $mouvementsArray[] = [
                     'id' => $m->id,
-                    'date' => $m->ecriture->date_ecriture->format('Y-m-d'),
+                    'date' => $dateEcr,
                     'numero_piece' => $m->ecriture->numero_piece,
                     'journal' => $m->ecriture->journal->code ?? 'OD',
                     'libelle' => $m->libelle ?: $m->ecriture->libelle,
@@ -855,8 +931,9 @@ class ComptaService
                     'libelle' => $compte->libelle,
                     'classe' => $compte->classe,
                 ],
-                'total_debit' => $mouvements->sum('debit'),
-                'total_credit' => $mouvements->sum('credit'),
+                'solde_initial' => $soldeInitial,
+                'total_debit' => $mouvements->sum('debit') + ($soldeInitial > 0 ? $soldeInitial : 0),
+                'total_credit' => $mouvements->sum('credit') + ($soldeInitial < 0 ? abs($soldeInitial) : 0),
                 'solde_final' => $solde,
                 'mouvements' => $mouvementsArray,
             ];
@@ -914,6 +991,124 @@ class ComptaService
             'total_produits' => $totalProduits,
             'resultat_net' => $resultatNet,
             'statut_resultat' => $resultatNet >= 0 ? 'Bénéfice' : 'Perte',
+        ];
+    }
+
+    /**
+     * Récupérer la liste des écritures pour le journal général avec filtres
+     */
+    public function getJournalEcritures(int $boutiqueId, ?int $journalId = null, ?string $dateDebut = null, ?string $dateFin = null, ?string $search = null)
+    {
+        $query = EcritureComptable::with(['journal', 'lignes.compte', 'user'])
+            ->where('boutique_id', $boutiqueId);
+
+        if ($journalId) {
+            $query->where('journal_id', $journalId);
+        }
+
+        if ($dateDebut) {
+            $query->where('date_ecriture', '>=', $dateDebut);
+        }
+
+        if ($dateFin) {
+            $query->where('date_ecriture', '<=', $dateFin);
+        }
+
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('numero_piece', 'like', "%{$search}%")
+                  ->orWhere('libelle', 'like', "%{$search}%");
+            });
+        }
+
+        return $query->orderBy('date_ecriture', 'asc')
+            ->orderBy('id', 'asc')
+            ->get();
+    }
+
+    /**
+     * Générer le Bilan Comptable SYSCOHADA (Actif / Passif)
+     */
+    public function getBilan(int $boutiqueId, ?string $dateDebut = null, ?string $dateFin = null): array
+    {
+        $balance = $this->getBalanceGenerale($boutiqueId, $dateDebut, $dateFin);
+        $compteResultat = $this->getCompteResultat($boutiqueId, $dateDebut, $dateFin);
+
+        $actifImmobilise = [];
+        $actifCirculant = [];
+        $tresorerieActif = [];
+        $capitauxPropres = [];
+        $passifCirculant = [];
+        $tresoreriePassif = [];
+
+        $totalActif = 0;
+        $totalPassif = 0;
+
+        foreach ($balance['comptes'] as $c) {
+            $classe = (int) $c['classe'];
+            $soldeDeb = $c['solde_debiteur'];
+            $soldeCred = $c['solde_crediteur'];
+            $soldeNet = $soldeDeb - $soldeCred;
+
+            if ($classe === 2) { // Immobilisations (brutes ou amortissements en déduction)
+                if ($soldeNet != 0) {
+                    $actifImmobilise[] = ['numero' => $c['numero'], 'libelle' => $c['libelle'], 'net' => $soldeNet];
+                    $totalActif += $soldeNet;
+                }
+            } elseif ($classe === 3) { // Stocks
+                if ($soldeNet > 0) {
+                    $actifCirculant[] = ['numero' => $c['numero'], 'libelle' => $c['libelle'], 'net' => $soldeNet];
+                    $totalActif += $soldeNet;
+                }
+            } elseif ($classe === 4) { // Tiers
+                if ($soldeNet > 0) {
+                    $actifCirculant[] = ['numero' => $c['numero'], 'libelle' => $c['libelle'], 'net' => $soldeNet];
+                    $totalActif += $soldeNet;
+                } elseif ($soldeNet < 0) {
+                    $passifCirculant[] = ['numero' => $c['numero'], 'libelle' => $c['libelle'], 'net' => abs($soldeNet)];
+                    $totalPassif += abs($soldeNet);
+                }
+            } elseif ($classe === 5) { // Trésorerie
+                if ($soldeNet > 0) {
+                    $tresorerieActif[] = ['numero' => $c['numero'], 'libelle' => $c['libelle'], 'net' => $soldeNet];
+                    $totalActif += $soldeNet;
+                } elseif ($soldeNet < 0) {
+                    $tresoreriePassif[] = ['numero' => $c['numero'], 'libelle' => $c['libelle'], 'net' => abs($soldeNet)];
+                    $totalPassif += abs($soldeNet);
+                }
+            } elseif ($classe === 1) { // Capitaux propres
+                $soldeCap = $soldeCred - $soldeDeb;
+                if ($soldeCap != 0) {
+                    $capitauxPropres[] = ['numero' => $c['numero'], 'libelle' => $c['libelle'], 'net' => $soldeCap];
+                    $totalPassif += $soldeCap;
+                }
+            }
+        }
+
+        // Ajouter le résultat net dans les capitaux propres
+        $resultatNet = $compteResultat['resultat_net'];
+        $capitauxPropres[] = [
+            'numero' => '13',
+            'libelle' => 'Résultat Net de l\'exercice (' . $compteResultat['statut_resultat'] . ')',
+            'net' => $resultatNet,
+        ];
+        $totalPassif += $resultatNet;
+
+        return [
+            'periode' => ['debut' => $dateDebut, 'fin' => $dateFin],
+            'actif' => [
+                'immobilise' => $actifImmobilise,
+                'circulant' => $actifCirculant,
+                'tresorerie' => $tresorerieActif,
+                'total' => $totalActif,
+            ],
+            'passif' => [
+                'capitaux' => $capitauxPropres,
+                'circulant' => $passifCirculant,
+                'tresorerie' => $tresoreriePassif,
+                'total' => $totalPassif,
+            ],
+            'equilibre' => abs(round($totalActif, 2) - round($totalPassif, 2)) < 0.05,
         ];
     }
 }

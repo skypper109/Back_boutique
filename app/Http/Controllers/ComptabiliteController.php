@@ -250,4 +250,22 @@ class ComptabiliteController extends Controller
 
         return response()->json($resultat, 200);
     }
+
+    /**
+     * Bilan comptable SYSCOHADA (Actif vs Passif)
+     */
+    public function bilan(Request $request)
+    {
+        $boutiqueId = $this->getBoutiqueId();
+        if (!$boutiqueId) {
+            return response()->json(['message' => 'Boutique non identifiée.'], 400);
+        }
+
+        $dateDebut = $request->input('date_debut');
+        $dateFin = $request->input('date_fin');
+
+        $bilan = $this->comptaService->getBilan($boutiqueId, $dateDebut, $dateFin);
+
+        return response()->json($bilan, 200);
+    }
 }

@@ -1,120 +1,113 @@
 @extends('layouts.admin')
 
 @section('content')
-    <div class="space-y-10">
+    <div class="space-y-10 animate-fade-in">
         <!-- Header Section -->
-        <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 px-4">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-2 border-b border-slate-200/60">
             <div class="space-y-1">
-                <h1 class="text-4xl font-black text-slate-900 tracking-tight">Administrateurs <span
-                        class="text-primary-600 tracking-tighter italic">Système.</span></h1>
-                <p class="text-slate-500 font-medium tracking-tight">Gestion des accès de haut niveau pour l'ensemble du
-                    réseau Ma Boutique.</p>
+                <div class="inline-flex items-center gap-2 px-3 py-1 bg-brand-50 text-brand-700 rounded-full text-[10px] font-black uppercase tracking-widest mb-1">
+                    <i class="bi bi-shield-lock-fill"></i>
+                    Sécurité Haute Instance
+                </div>
+                <h1 class="text-3xl lg:text-4xl font-black text-slate-900 tracking-tight">
+                    Administrateurs <span class="text-brand-600">Système.</span>
+                </h1>
+                <p class="text-slate-500 font-semibold text-xs">
+                    Gestion des comptes administrateurs et contrôle des quotas d'expansion de boutiques.
+                </p>
             </div>
-            <div class="flex gap-4">
-                <div class="glass-card px-6 py-3 rounded-2xl flex items-center gap-4">
-                    <div
-                        class="w-10 h-10 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center text-lg">
+            <div class="flex items-center gap-3">
+                <div class="glass-card px-6 py-3.5 rounded-2xl flex items-center gap-4 shadow-sm">
+                    <div class="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center text-lg">
                         <i class="bi bi-shield-lock-fill"></i>
                     </div>
                     <div>
-                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Effectif Admin</p>
-                        <p class="text-xl font-black text-slate-900 leading-none">{{ $admins->total() }}</p>
+                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Effectif Administrateur</p>
+                        <p class="text-xl font-black text-slate-900 leading-none mt-0.5">{{ $admins->total() }}</p>
                     </div>
                 </div>
             </div>
         </div>
 
         <!-- Main Table Card -->
-        <div class="glass-card rounded-[2.5rem] overflow-hidden">
-            <div
-                class="p-8 border-b border-slate-100 bg-white/50 backdrop-blur-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <h3 class="font-black text-slate-900 text-sm uppercase tracking-widest flex items-center gap-3">
-                    <i class="bi bi-person-badge text-primary-500 text-lg"></i>
-                    Comptes Administrateurs
+        <div class="glass-card rounded-[2.5rem] overflow-hidden shadow-card-soft">
+            <div class="p-8 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+                <h3 class="font-black text-slate-900 text-sm uppercase tracking-wider flex items-center gap-3">
+                    <i class="bi bi-person-badge-fill text-brand-600 text-lg"></i>
+                    Comptes d'Administration Système
                 </h3>
             </div>
 
             <div class="overflow-x-auto">
-                <table class="w-full text-left border-separate border-spacing-y-1">
-                    <thead class="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">
-                        <tr>
-                            <th class="px-8 py-6">Administrateur</th>
-                            <th class="px-8 py-6 text-center">Privilèges</th>
-                            <th class="px-8 py-6 text-center">Limite Boutiques</th>
-                            <th class="px-8 py-6 text-center">Inscription</th>
-                            <th class="px-8 py-6 text-right">Sécurité</th>
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="border-b border-slate-100 bg-white text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                            <th class="px-8 py-5">Administrateur</th>
+                            <th class="px-8 py-5 text-center">Privilèges</th>
+                            <th class="px-8 py-5 text-center">Quota Boutiques</th>
+                            <th class="px-8 py-5 text-center">Inscription</th>
+                            <th class="px-8 py-5 text-right">Sécurité</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-50">
+                    <tbody class="divide-y divide-slate-100 bg-white">
                         @foreach ($admins as $admin)
                             @if ($admin->role == 'admin' || $admin->role == 'super_admin')
-                                <tr class="group transition-all hover:bg-slate-50/80">
-                                    <td class="px-8 py-6">
-                                        <div class="flex items-center gap-5">
-                                            <div
-                                                class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-black text-lg group-hover:scale-110 transition-transform duration-500">
+                                <tr class="hover:bg-slate-50/80 transition-colors">
+                                    <td class="px-8 py-5">
+                                        <div class="flex items-center gap-4">
+                                            <div class="w-12 h-12 rounded-2xl {{ $admin->role === 'super_admin' ? 'bg-amber-50 text-amber-600 border border-amber-200' : 'bg-brand-50 text-brand-600 border border-brand-200' }} flex items-center justify-center font-black text-base shadow-sm">
                                                 {{ substr($admin->name, 0, 1) }}
                                             </div>
-                                            <div class="space-y-0.5">
-                                                <p
-                                                    class="font-black text-slate-900 tracking-tight leading-tight group-hover:text-primary-600 transition-colors">
-                                                    {{ $admin->name }}</p>
-                                                <div class="flex items-center gap-2">
-                                                    <span class="text-[11px] font-medium text-slate-400">
-                                                        <i class="bi bi-envelope"></i> {{ $admin->email }}
-                                                    </span>
-                                                </div>
+                                            <div>
+                                                <p class="font-black text-slate-900 text-xs tracking-tight">{{ $admin->name }}</p>
+                                                <p class="text-[11px] font-semibold text-slate-400 mt-0.5">{{ $admin->email }}</p>
                                             </div>
                                         </div>
                                     </td>
 
-                                    <td class="px-8 py-6 text-center">
-                                        <span
-                                            class="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[10px] font-black uppercase tracking-widest {{ $admin->role === 'super_admin' ? 'bg-amber-50 text-amber-600 ring-1 ring-amber-100' : 'bg-primary-50 text-primary-600 ring-1 ring-primary-100' }}">
-                                            <i
-                                                class="{{ $admin->role === 'super_admin' ? 'bi bi-star-fill' : 'bi bi-shield-check' }}"></i>
-                                            {{ $admin->role }}
+                                    <td class="px-8 py-5 text-center">
+                                        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border {{ $admin->role === 'super_admin' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-brand-50 text-brand-700 border-brand-200' }}">
+                                            <i class="{{ $admin->role === 'super_admin' ? 'bi bi-star-fill text-amber-500' : 'bi bi-shield-check text-brand-500' }}"></i>
+                                            {{ $admin->role === 'super_admin' ? 'Super Admin' : 'Admin' }}
                                         </span>
                                     </td>
 
-                                    <td class="px-8 py-6">
+                                    <td class="px-8 py-5">
                                         <form action="{{ route('admin.admins.update-limit', $admin->id) }}" method="POST"
                                             class="flex items-center justify-center gap-2">
                                             @csrf
-                                            <input type="number" name="boutique_limit" value="{{ $admin->boutique_limit }}"
-                                                min="1"
-                                                class="w-16 px-2 py-1.5 bg-white border border-slate-200 rounded-xl text-sm font-black text-slate-900 text-center focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all">
+                                            <input type="number" name="boutique_limit" value="{{ $admin->boutique_limit }}" min="1"
+                                                class="w-16 px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black text-slate-900 text-center focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none transition-all">
                                             <button type="submit"
-                                                class="w-8 h-8 rounded-xl bg-white border border-slate-200 text-slate-400 hover:text-emerald-500 hover:border-emerald-200 hover:bg-emerald-50 flex items-center justify-center transition-all shadow-sm"
-                                                title="Mettre à jour la limite">
-                                                <i class="bi bi-check-lg"></i>
+                                                class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-emerald-50 text-slate-400 hover:text-emerald-600 hover:border-emerald-200 border border-slate-200 flex items-center justify-center transition-all cursor-pointer shadow-sm"
+                                                title="Mettre à jour le quota">
+                                                <i class="bi bi-check-lg text-sm"></i>
                                             </button>
                                         </form>
                                     </td>
 
-                                    <td class="px-8 py-6 text-center">
-                                        <span
-                                            class="text-xs font-bold text-slate-500">{{ $admin->created_at->format('d/m/Y') }}</span>
+                                    <td class="px-8 py-5 text-center">
+                                        <span class="text-xs font-bold text-slate-500">
+                                            {{ $admin->created_at->format('d/m/Y') }}
+                                        </span>
                                     </td>
 
-                                    <td class="px-8 py-6 text-right">
+                                    <td class="px-8 py-5 text-right">
                                         <div class="flex items-center justify-end gap-2">
                                             @if ($admin->id !== Auth::id())
-                                                <form action="{{ route('admin.admins.destroy', $admin->id) }}"
-                                                    method="POST"
-                                                    onsubmit="return confirm('ALERTE: Suppression irréversible du compte administrateur. Confirmer ?');">
+                                                <form action="{{ route('admin.admins.destroy', $admin->id) }}" method="POST"
+                                                    onsubmit="return triggerDeleteConfirm(event, 'Supprimer l\'administrateur', 'Voulez-vous vraiment supprimer définitivement le compte de {{ addslashes($admin->name) }} ? Cette action est irréversible.');">
                                                     @csrf
                                                     @method('DELETE')
                                                     <button type="submit"
-                                                        class="w-10 h-10 rounded-2xl bg-white border border-rose-100 text-rose-400 hover:bg-rose-50 hover:text-rose-600 flex items-center justify-center transition-all shadow-sm"
-                                                        title="Supprimer le compte">
-                                                        <i class="bi bi-trash3-fill"></i>
+                                                        class="w-9 h-9 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-500 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+                                                        title="Supprimer définitivement">
+                                                        <i class="bi bi-trash3-fill text-xs"></i>
                                                     </button>
                                                 </form>
                                             @else
-                                                <span
-                                                    class="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-50 text-emerald-600 text-[10px] font-black uppercase tracking-widest ring-1 ring-emerald-100">
-                                                    <i class="bi bi-person-check-fill"></i> MOI
+                                                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-50 text-emerald-700 text-[10px] font-black uppercase tracking-wider border border-emerald-200">
+                                                    <i class="bi bi-person-check-fill"></i> Compte Actuel
                                                 </span>
                                             @endif
                                         </div>

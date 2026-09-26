@@ -49,9 +49,5 @@ jobs:
             php artisan config:cache
             php artisan route:cache
 
-            echo "🔄 Restart queue workers and reload PHP-FPM"
-            php artisan queue:restart || true
-            sudo systemctl reload php*-fpm 2>/dev/null || sudo systemctl reload php8.2-fpm 2>/dev/null || true
-
             echo "Deployment finished"
           EOF

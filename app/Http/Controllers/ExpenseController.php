@@ -83,7 +83,17 @@ class ExpenseController extends Controller
             'date' => 'required|date',
         ]);
 
+        $comptaService = app(\App\Services\ComptaService::class);
+        // Contre-passation de l'ancienne version
+        $comptaService->enregistrerAnnulationDepense($expense);
+        \App\Models\EcritureComptable::where('source_type', 'Expense')
+            ->where('source_id', $expense->id)
+            ->delete();
+
         $expense->update($fields);
+
+        // Enregistrement de l'écriture rectifiée
+        $comptaService->enregistrerDepense($expense);
 
         return response()->json($expense);
     }

@@ -17,15 +17,17 @@ class PdfController extends Controller
     public function generatePdf(Request $request)
     {
         $request->validate([
-            'type' => 'required|in:facture,bordereau,recu_credit,inventaire,rapport_journalier',
-            'id' => 'required|integer',
+            'type' => 'required|in:facture,bordereau,recu_credit,inventaire,rapport_journalier,journal,grand_livre,balance,compte_resultat,bilan',
+            'id' => 'nullable|integer',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date',
-            'produit_id' => 'nullable|integer'
+            'produit_id' => 'nullable|integer',
+            'journal_id' => 'nullable|integer',
+            'compte_id' => 'nullable|integer'
         ]);
 
         $type = $request->input('type');
-        $id = $request->input('id');
+        $id = $request->input('id', 0);
 
         try {
             // Load data based on type
@@ -38,10 +40,18 @@ class PdfController extends Controller
                 'recu_credit' => 'pdf.recu_credit',
                 'inventaire' => 'pdf.inventaire',
                 'rapport_journalier' => 'pdf.rapport_journalier',
+                'journal' => 'pdf.compta.journal',
+                'grand_livre' => 'pdf.compta.grand_livre',
+                'balance' => 'pdf.compta.balance',
+                'compte_resultat' => 'pdf.compta.compte_resultat',
+                'bilan' => 'pdf.compta.bilan',
             };
 
             // Configure PDF options
-            $orientation = $type === 'inventaire' ? 'landscape' : 'portrait';
+            $orientation = match($type) {
+                'inventaire', 'journal', 'grand_livre', 'balance', 'bilan' => 'landscape',
+                default => 'portrait'
+            };
             
             // Generate PDF
             $pdf = PDF::loadView($template, $data)
@@ -52,7 +62,7 @@ class PdfController extends Controller
                     'defaultFont' => 'sans-serif'
                 ]);
 
-            $filename = "{$type}-{$id}.pdf";
+            $filename = ($id && $id > 0) ? "{$type}-{$id}.pdf" : "{$type}-" . now()->format('Y-m-d') . ".pdf";
             
             return $pdf->download($filename);
         } catch (\Exception $e) {
@@ -66,7 +76,7 @@ class PdfController extends Controller
     /**
      * Preview PDF in browser
      */
-    public function previewPdf(Request $request, $type, $id)
+    public function previewPdf(Request $request, $type, $id = 0)
     {
         try {
             $data = $this->loadData($type, $id);
@@ -77,9 +87,17 @@ class PdfController extends Controller
                 'recu_credit' => 'pdf.recu_credit',
                 'inventaire' => 'pdf.inventaire',
                 'rapport_journalier' => 'pdf.rapport_journalier',
+                'journal' => 'pdf.compta.journal',
+                'grand_livre' => 'pdf.compta.grand_livre',
+                'balance' => 'pdf.compta.balance',
+                'compte_resultat' => 'pdf.compta.compte_resultat',
+                'bilan' => 'pdf.compta.bilan',
             };
 
-            $orientation = $type === 'inventaire' ? 'landscape' : 'portrait';
+            $orientation = match($type) {
+                'inventaire', 'journal', 'grand_livre', 'balance', 'bilan' => 'landscape',
+                default => 'portrait'
+            };
             
             $pdf = PDF::loadView($template, $data)
                 ->setPaper('a4', $orientation);
@@ -211,6 +229,117 @@ class PdfController extends Controller
                 $data = $controller->loadReportData($report->boutique_id, $date);
                 
                 return $data;
+
+            case 'journal':
+                $boutique = $boutiqueId ? Boutique::findOrFail($boutiqueId) : Boutique::first();
+                $journalId = request('journal_id');
+                $startDate = request('start_date') ?? request('date_debut');
+                $endDate = request('end_date') ?? request('date_fin');
+                $search = request('search');
+
+                $comptaService = app(\App\Services\ComptaService::class);
+                $ecritures = $comptaService->getJournalEcritures($boutique->id, $journalId, $startDate, $endDate, $search);
+
+                $totalDebit = 0;
+                $totalCredit = 0;
+                foreach ($ecritures as $e) {
+                    foreach ($e->lignes as $l) {
+                        $totalDebit += (float) $l->debit;
+                        $totalCredit += (float) $l->credit;
+                    }
+                }
+
+                $journalModel = $journalId ? \App\Models\JournalComptable::find($journalId) : null;
+
+                return [
+                    'boutique' => $boutique,
+                    'ecritures' => $ecritures,
+                    'totalDebit' => $totalDebit,
+                    'totalCredit' => $totalCredit,
+                    'journal' => $journalModel,
+                    'filters' => [
+                        'start_date' => $startDate ? \Carbon\Carbon::parse($startDate)->format('d/m/Y') : null,
+                        'end_date' => $endDate ? \Carbon\Carbon::parse($endDate)->format('d/m/Y') : null,
+                        'journal_libelle' => $journalModel ? $journalModel->libelle : 'Tous les journaux',
+                    ],
+                    'date' => now()
+                ];
+
+            case 'grand_livre':
+                $boutique = $boutiqueId ? Boutique::findOrFail($boutiqueId) : Boutique::first();
+                $compteId = request('compte_id');
+                $startDate = request('start_date') ?? request('date_debut');
+                $endDate = request('end_date') ?? request('date_fin');
+
+                $comptaService = app(\App\Services\ComptaService::class);
+                $grandLivre = $comptaService->getGrandLivre($boutique->id, $startDate, $endDate, $compteId);
+                $compteModel = $compteId ? \App\Models\CompteComptable::find($compteId) : null;
+
+                return [
+                    'boutique' => $boutique,
+                    'grandLivre' => $grandLivre,
+                    'compte' => $compteModel,
+                    'filters' => [
+                        'start_date' => $startDate ? \Carbon\Carbon::parse($startDate)->format('d/m/Y') : null,
+                        'end_date' => $endDate ? \Carbon\Carbon::parse($endDate)->format('d/m/Y') : null,
+                        'compte_libelle' => $compteModel ? ($compteModel->numero . ' - ' . $compteModel->libelle) : 'Tous les comptes',
+                    ],
+                    'date' => now()
+                ];
+
+            case 'balance':
+                $boutique = $boutiqueId ? Boutique::findOrFail($boutiqueId) : Boutique::first();
+                $startDate = request('start_date') ?? request('date_debut');
+                $endDate = request('end_date') ?? request('date_fin');
+
+                $comptaService = app(\App\Services\ComptaService::class);
+                $balance = $comptaService->getBalanceGenerale($boutique->id, $startDate, $endDate);
+
+                return [
+                    'boutique' => $boutique,
+                    'balance' => $balance,
+                    'filters' => [
+                        'start_date' => $startDate ? \Carbon\Carbon::parse($startDate)->format('d/m/Y') : null,
+                        'end_date' => $endDate ? \Carbon\Carbon::parse($endDate)->format('d/m/Y') : null,
+                    ],
+                    'date' => now()
+                ];
+
+            case 'compte_resultat':
+                $boutique = $boutiqueId ? Boutique::findOrFail($boutiqueId) : Boutique::first();
+                $startDate = request('start_date') ?? request('date_debut');
+                $endDate = request('end_date') ?? request('date_fin');
+
+                $comptaService = app(\App\Services\ComptaService::class);
+                $resultat = $comptaService->getCompteResultat($boutique->id, $startDate, $endDate);
+
+                return [
+                    'boutique' => $boutique,
+                    'resultat' => $resultat,
+                    'filters' => [
+                        'start_date' => $startDate ? \Carbon\Carbon::parse($startDate)->format('d/m/Y') : null,
+                        'end_date' => $endDate ? \Carbon\Carbon::parse($endDate)->format('d/m/Y') : null,
+                    ],
+                    'date' => now()
+                ];
+
+            case 'bilan':
+                $boutique = $boutiqueId ? Boutique::findOrFail($boutiqueId) : Boutique::first();
+                $startDate = request('start_date') ?? request('date_debut');
+                $endDate = request('end_date') ?? request('date_fin');
+
+                $comptaService = app(\App\Services\ComptaService::class);
+                $bilan = $comptaService->getBilan($boutique->id, $startDate, $endDate);
+
+                return [
+                    'boutique' => $boutique,
+                    'bilan' => $bilan,
+                    'filters' => [
+                        'start_date' => $startDate ? \Carbon\Carbon::parse($startDate)->format('d/m/Y') : null,
+                        'end_date' => $endDate ? \Carbon\Carbon::parse($endDate)->format('d/m/Y') : null,
+                    ],
+                    'date' => now()
+                ];
 
             default:
                 throw new \Exception('Type de document invalide');

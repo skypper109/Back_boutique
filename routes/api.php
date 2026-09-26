@@ -14,6 +14,7 @@ use App\Http\Controllers\AnneeController;
 use App\Http\Controllers\UserStatusController;
 use App\Http\Controllers\LicenceController;
 use App\Http\Controllers\{CreditController,ExpenseController};
+use App\Http\Controllers\GlobalSearchController;
 
 // Auth Routes
 Route::post('/login', [AuthController::class, 'login'])->name('login');
@@ -31,6 +32,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
 // Protected Routes (Authentication + Active status checks)
 Route::middleware(['auth:sanctum', 'check.user.active', 'check.boutique.active'])->group(function () {
+    Route::get('/global-search', [GlobalSearchController::class, 'search']);
     Route::get('/user', [AuthController::class, 'index']);
 // ... reste des routes ...
         Route::get('/user/{id}', [AuthController::class, 'showUser']);

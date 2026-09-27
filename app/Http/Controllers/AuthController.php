@@ -66,6 +66,7 @@ class AuthController extends Controller
             'user' => $user,
             'user_role' => $user->role,
             'boutique_id' => $user->boutique_id ?: (\App\Models\Boutique::first()?->id),
+            'date_expiration' => $boutique?->date_expiration_licence,
             'access_token' => $token
         ], 201);
     }

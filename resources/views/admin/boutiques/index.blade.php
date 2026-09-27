@@ -142,7 +142,7 @@
                                 </td>
 
                                 <td class="px-8 py-5">
-                                    @if ($boutique->date_expiration_licence === null)
+                                    @if ($boutique->hasUnlimitedLicence())
                                         <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black bg-purple-50 text-purple-700 border border-purple-200">
                                             <i class="bi bi-infinity"></i> Permanent
                                         </span>
@@ -151,7 +151,11 @@
                                             <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black bg-rose-50 text-rose-700 border border-rose-200">
                                                 <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span> Expirée
                                             </span>
-                                            <p class="text-[10px] text-rose-500 font-semibold">{{ \Carbon\Carbon::parse($boutique->date_expiration_licence)->format('d/m/Y') }}</p>
+                                            @if($boutique->date_expiration_licence && \Carbon\Carbon::parse($boutique->date_expiration_licence)->isPast())
+                                                <p class="text-[10px] text-rose-500 font-semibold">{{ \Carbon\Carbon::parse($boutique->date_expiration_licence)->format('d/m/Y') }}</p>
+                                            @else
+                                                <p class="text-[10px] text-rose-400 font-semibold">Aucune clé active</p>
+                                            @endif
                                         </div>
                                     @else
                                         @php $jours = $boutique->joursRestants(); @endphp

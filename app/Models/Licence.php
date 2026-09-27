@@ -27,6 +27,23 @@ class Licence extends Model
         'duree_jours' => 'integer',
     ];
 
+    protected static function booted()
+    {
+        static::saved(function ($licence) {
+            if ($licence->boutique_id) {
+                $boutique = Boutique::find($licence->boutique_id);
+                $boutique?->recalculerLicence();
+            }
+        });
+
+        static::deleted(function ($licence) {
+            if ($licence->boutique_id) {
+                $boutique = Boutique::find($licence->boutique_id);
+                $boutique?->recalculerLicence();
+            }
+        });
+    }
+
     public function boutique()
     {
         return $this->belongsTo(Boutique::class);

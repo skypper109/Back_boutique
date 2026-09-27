@@ -42,7 +42,18 @@ class Boutique extends Model
     }
 
     /**
-     * Vérifie si la licence de la boutique a expiré
+     * Vérifie si la boutique a une licence illimitée active
+     */
+    public function hasUnlimitedLicence(): bool
+    {
+        return $this->licences()
+            ->where('statut', 'active')
+            ->where('duree_jours', '>=', 90000)
+            ->exists();
+    }
+
+    /**
+     * Vérifie si la licence de la boutique a expiré ou n'est plus valide
      */
     public function isLicenceExpired(): bool
     {
@@ -50,11 +61,26 @@ class Boutique extends Model
             return true;
         }
 
-        // Si aucune date d'expiration n'a été fixée (nouvelle boutique ou période illimitée)
-        if ($this->date_expiration_licence === null) {
+        // Si la boutique dispose d'une licence illimitée active
+        if ($this->hasUnlimitedLicence()) {
             return false;
         }
 
+        // Vérifier s'il existe au moins une licence active non révoquée
+        $hasActiveLicence = $this->licences()
+            ->where('statut', 'active')
+            ->exists();
+
+        if (!$hasActiveLicence) {
+            return true;
+        }
+
+        // Si aucune date d'expiration n'est fixée
+        if ($this->date_expiration_licence === null) {
+            return true;
+        }
+
+        // Si la date d'expiration est dépassée par rapport à maintenant
         return now()->greaterThan($this->date_expiration_licence);
     }
 
@@ -63,12 +89,53 @@ class Boutique extends Model
      */
     public function joursRestants(): ?int
     {
-        if ($this->date_expiration_licence === null) {
+        if ($this->hasUnlimitedLicence()) {
             return null;
         }
 
+        if ($this->date_expiration_licence === null || $this->isLicenceExpired()) {
+            return 0;
+        }
+
         $diff = (int) now()->diffInDays($this->date_expiration_licence, false);
-        return $diff;
+        return max(0, $diff);
+    }
+
+    /**
+     * Recalcule et synchronise l'état de la licence de la boutique
+     * en fonction de ses licences réelles actives.
+     */
+    public function recalculerLicence(): void
+    {
+        // 1. Licence illimitée active ?
+        if ($this->hasUnlimitedLicence()) {
+            $this->date_expiration_licence = null;
+            $this->save();
+            return;
+        }
+
+        // 2. Licences actives avec date d'expiration
+        $activeLicences = $this->licences()
+            ->where('statut', 'active')
+            ->whereNotNull('date_expiration')
+            ->get();
+
+        if ($activeLicences->isEmpty()) {
+            // Aucune licence active : date d'expiration passée pour bloquer l'accès
+            $this->date_expiration_licence = now()->subMinute();
+            $this->save();
+            return;
+        }
+
+        // 3. Calculer la date maximale parmi les licences actives
+        $maxExp = $activeLicences->max('date_expiration');
+        if ($maxExp) {
+            $this->date_expiration_licence = $maxExp;
+        } else {
+            $this->date_expiration_licence = now()->subMinute();
+        }
+
+        $this->save();
     }
 
     public function nature()

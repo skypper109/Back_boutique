@@ -181,7 +181,7 @@
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 py-6 border-b border-slate-100">
                 <div class="p-5 bg-slate-50 rounded-2xl border border-slate-100">
                     <span class="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-2">Statut Actuel Licence</span>
-                    @if ($boutique->date_expiration_licence === null)
+                    @if ($boutique->hasUnlimitedLicence())
                         <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black bg-purple-100 text-purple-800">
                             <i class="bi bi-infinity"></i> Actif à Vie (Illimité)
                         </span>
@@ -201,7 +201,17 @@
                 <div class="p-5 bg-slate-50 rounded-2xl border border-slate-100">
                     <span class="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1">Date d'Échéance Actuelle</span>
                     <p class="text-base lg:text-lg font-black text-slate-800 mt-1">
-                        {{ $boutique->date_expiration_licence ? \Carbon\Carbon::parse($boutique->date_expiration_licence)->format('d/m/Y à H:i') : 'Aucune restriction (À Vie)' }}
+                        @if ($boutique->hasUnlimitedLicence())
+                            Aucune restriction (À Vie)
+                        @elseif ($boutique->isLicenceExpired())
+                            @if ($boutique->date_expiration_licence && \Carbon\Carbon::parse($boutique->date_expiration_licence)->isPast())
+                                Expirée le {{ \Carbon\Carbon::parse($boutique->date_expiration_licence)->format('d/m/Y à H:i') }}
+                            @else
+                                Non activée (Aucune clé active)
+                            @endif
+                        @else
+                            {{ \Carbon\Carbon::parse($boutique->date_expiration_licence)->format('d/m/Y à H:i') }}
+                        @endif
                     </p>
                 </div>
 

@@ -104,7 +104,7 @@
             </div>
             <div>
                 <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Expirées / Révoquées</p>
-                <p class="text-2xl font-black text-slate-900 leading-none mt-1">{{ $stats['expirees'] }}</p>
+                <p class="text-2xl font-black text-slate-900 leading-none mt-1">{{ $stats['expirees'] + ($stats['revoquees'] ?? 0) }}</p>
             </div>
         </div>
     </div>

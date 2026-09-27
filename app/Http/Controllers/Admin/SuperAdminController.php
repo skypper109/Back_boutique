@@ -257,6 +257,7 @@ class SuperAdminController extends Controller
             'inutilisees' => Licence::where('statut', 'inutilisee')->count(),
             'actives' => Licence::where('statut', 'active')->count(),
             'expirees' => Licence::where('statut', 'expiree')->count(),
+            'revoquees' => Licence::where('statut', 'revoquee')->count(),
         ];
 
         return view('admin.licences.index', compact('licences', 'boutiques', 'stats'));
@@ -354,10 +355,15 @@ class SuperAdminController extends Controller
      */
     public function licenceRevoquer(Licence $licence)
     {
+        $boutique = $licence->boutique;
         $licence->statut = 'revoquee';
         $licence->save();
 
-        return back()->with('success', "La clé d'activation {$licence->cle_licence} a été révoquée.");
+        if ($boutique) {
+            $boutique->recalculerLicence();
+        }
+
+        return back()->with('success', "La clé d'activation « {$licence->cle_licence} » a été révoquée avec succès.");
     }
 
     /**
@@ -365,8 +371,13 @@ class SuperAdminController extends Controller
      */
     public function licenceDestroy(Licence $licence)
     {
+        $boutique = $licence->boutique;
         $cle = $licence->cle_licence;
         $licence->delete();
+
+        if ($boutique) {
+            $boutique->recalculerLicence();
+        }
 
         return back()->with('success', "La clé de licence « {$cle} » a été définitivement supprimée.");
     }

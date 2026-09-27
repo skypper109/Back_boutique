@@ -51,6 +51,8 @@ Route::middleware(['auth:sanctum', 'check.user.active', 'check.boutique.active']
         Route::get('produits/trashed', [ProduitController::class, 'trashed']);
         Route::post('produits/{id}/restore', [ProduitController::class, 'restore']);
         Route::get('produits/editProd/{produit}', [ProduitController::class, 'editProd']);
+        Route::get('produits/stock-inter-filiales/recherche', [ProduitController::class, 'searchStockInterFiliales']);
+        Route::get('produits/{id}/disponibilites-filiales', [ProduitController::class, 'disponibilitesFiliales']);
         Route::post('produits/{produit}', [ProduitController::class, 'update']);
         Route::apiResource('produits', ProduitController::class);
 

@@ -24,6 +24,26 @@ class ComptabiliteController extends Controller
     public function comptes(Request $request)
     {
         $boutiqueId = $this->getBoutiqueId();
+        $boutique = $boutiqueId ? \App\Models\Boutique::find($boutiqueId) : null;
+
+        // Si filiale, synchroniser les comptes personnalisés créés sur la boutique principale
+        if ($boutique && $boutique->isFiliale()) {
+            $root = $boutique->getRootBoutique();
+            $rootComptes = CompteComptable::where('boutique_id', $root->id)->get();
+            foreach ($rootComptes as $rc) {
+                CompteComptable::firstOrCreate(
+                    ['numero' => $rc->numero, 'boutique_id' => $boutique->id],
+                    [
+                        'libelle' => $rc->libelle,
+                        'classe' => $rc->classe,
+                        'type' => $rc->type,
+                        'sens_normal' => $rc->sens_normal,
+                        'is_system' => false,
+                        'is_active' => $rc->is_active,
+                    ]
+                );
+            }
+        }
 
         $query = CompteComptable::where(function ($q) use ($boutiqueId) {
             $q->whereNull('boutique_id');
@@ -50,7 +70,7 @@ class ComptabiliteController extends Controller
     }
 
     /**
-     * Ajouter un sous-compte personnalisé pour la boutique
+     * Ajouter un sous-compte personnalisé pour la boutique et ses filiales
      */
     public function storeCompte(Request $request)
     {
@@ -77,19 +97,29 @@ class ComptabiliteController extends Controller
             return response()->json(['message' => 'Ce numéro de compte existe déjà.'], 422);
         }
 
-        $compte = CompteComptable::create([
-            'boutique_id' => $boutiqueId,
-            'numero' => $request->numero,
-            'libelle' => $request->libelle,
-            'classe' => $request->classe,
-            'type' => $request->type,
-            'sens_normal' => $request->sens_normal,
-            'is_system' => false,
-            'is_active' => true,
-        ]);
+        $boutique = \App\Models\Boutique::find($boutiqueId);
+        $groupBoutiqueIds = $boutique ? $boutique->getGroupBoutiqueIds() : [$boutiqueId];
+
+        $compte = null;
+        foreach ($groupBoutiqueIds as $gid) {
+            $created = CompteComptable::firstOrCreate(
+                ['numero' => $request->numero, 'boutique_id' => $gid],
+                [
+                    'libelle' => $request->libelle,
+                    'classe' => $request->classe,
+                    'type' => $request->type,
+                    'sens_normal' => $request->sens_normal,
+                    'is_system' => false,
+                    'is_active' => true,
+                ]
+            );
+            if ($gid == $boutiqueId) {
+                $compte = $created;
+            }
+        }
 
         return response()->json([
-            'message' => 'Compte comptable créé avec succès.',
+            'message' => 'Compte comptable créé avec succès et synchronisé avec les filiales.',
             'compte' => $compte,
         ], 201);
     }

@@ -164,6 +164,10 @@ class BoutiqueController extends Controller
 
             $boutique = Boutique::create($fields);
 
+            if (isset($primaryBoutique) && $primaryBoutique) {
+                $this->syncParentDataToNewFiliale($boutique, $primaryBoutique);
+            }
+
             return response()->json($boutique, 201);
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::error('Error creating boutique: ' . $e->getMessage(), [
@@ -236,6 +240,10 @@ class BoutiqueController extends Controller
                 }
 
                 $boutique = Boutique::create($boutiqueFields);
+
+                if (isset($primaryBoutique) && $primaryBoutique) {
+                    $this->syncParentDataToNewFiliale($boutique, $primaryBoutique);
+                }
 
                 // 3. Create Manager User
                 $managerFields = $request->input('manager');
@@ -311,5 +319,41 @@ class BoutiqueController extends Controller
         $boutique->delete();
 
         return response()->json(['message' => 'Boutique supprimée'], 200);
+    }
+
+    /**
+     * Synchronise les années fiscales actives et les comptes comptables personnalisés
+     * depuis la boutique principale vers une nouvelle filiale.
+     */
+    protected function syncParentDataToNewFiliale(Boutique $filiale, Boutique $parent): void
+    {
+        try {
+            // 1. Synchroniser les années actives
+            $parentAnnees = \App\Models\Annee::where('boutique_id', $parent->id)->get();
+            foreach ($parentAnnees as $annee) {
+                \App\Models\Annee::firstOrCreate(
+                    ['annee' => $annee->annee, 'boutique_id' => $filiale->id],
+                    ['is_active' => $annee->is_active]
+                );
+            }
+
+            // 2. Synchroniser les comptes comptables personnalisés
+            $parentComptes = \App\Models\CompteComptable::where('boutique_id', $parent->id)->get();
+            foreach ($parentComptes as $compte) {
+                \App\Models\CompteComptable::firstOrCreate(
+                    ['numero' => $compte->numero, 'boutique_id' => $filiale->id],
+                    [
+                        'libelle' => $compte->libelle,
+                        'classe' => $compte->classe,
+                        'type' => $compte->type,
+                        'sens_normal' => $compte->sens_normal,
+                        'is_system' => false,
+                        'is_active' => $compte->is_active,
+                    ]
+                );
+            }
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::warning('Échec de synchronisation filiale depuis le parent: ' . $e->getMessage());
+        }
     }
 }

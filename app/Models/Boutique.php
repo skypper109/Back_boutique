@@ -76,6 +76,26 @@ class Boutique extends Model
     }
 
     /**
+     * Retourne tous les identifiants de boutiques du groupe (la racine et toutes les filiales)
+     * @return int[]
+     */
+    public function getGroupBoutiqueIds(): array
+    {
+        $root = $this->getRootBoutique();
+        $filialeIds = Boutique::where('parent_id', $root->id)->pluck('id')->toArray();
+        return array_values(array_unique(array_merge([$root->id], $filialeIds)));
+    }
+
+    /**
+     * Retourne la collection de toutes les boutiques du même groupe
+     */
+    public function getGroupBoutiques()
+    {
+        $ids = $this->getGroupBoutiqueIds();
+        return Boutique::whereIn('id', $ids)->get();
+    }
+
+    /**
      * Vérifie si la boutique (ou sa boutique principale de groupe) a une licence illimitée active
      */
     public function hasUnlimitedLicence(): bool

@@ -267,6 +267,10 @@ class SuperAdminController extends Controller
      */
     public function licenceStore(Request $request)
     {
+        if ($request->input('duree_mode') === 'custom' && $request->filled('duree_jours_custom')) {
+            $request->merge(['duree_jours' => (int) $request->input('duree_jours_custom')]);
+        }
+
         $request->validate([
             'boutique_id' => 'required|exists:boutiques,id',
             'duree_jours' => 'required|integer|min:1',
@@ -301,6 +305,10 @@ class SuperAdminController extends Controller
      */
     public function licenceProlongerDirect(Request $request, Boutique $boutique)
     {
+        if ($request->input('duree_mode') === 'custom' && $request->filled('duree_jours_custom')) {
+            $request->merge(['duree_jours' => (int) $request->input('duree_jours_custom')]);
+        }
+
         $request->validate([
             'duree_jours' => 'required|integer|min:1',
             'note' => 'nullable|string|max:255',

@@ -284,14 +284,48 @@
                     @csrf
                     <input type="hidden" name="boutique_id" value="{{ $boutique->id }}">
                     <div>
-                        <label class="block text-xs font-black uppercase tracking-widest text-slate-400 mb-2">Durée de Validité</label>
-                        <select name="duree_jours" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none">
-                            <option value="30">1 Mois (30 jours)</option>
-                            <option value="90">3 Mois (90 jours)</option>
-                            <option value="180">6 Mois (180 jours)</option>
-                            <option value="365">1 An (365 jours)</option>
-                            <option value="99999">À Vie (Illimité)</option>
-                        </select>
+                        <div class="flex items-center justify-between mb-2">
+                            <label class="block text-xs font-black uppercase tracking-widest text-slate-400">Durée de Validité</label>
+                            <div class="inline-flex p-0.5 bg-slate-100 rounded-xl text-[10px] font-bold">
+                                <button type="button" onclick="setDureeModeBoutique('preset')" id="btnModePreset_boutique"
+                                    class="px-2.5 py-1 rounded-lg transition-all bg-white text-brand-600 shadow-sm cursor-pointer">
+                                    <i class="bi bi-calendar3 mr-1"></i>En Mois
+                                </button>
+                                <button type="button" onclick="setDureeModeBoutique('custom')" id="btnModeCustom_boutique"
+                                    class="px-2.5 py-1 rounded-lg transition-all text-slate-500 hover:text-slate-800 cursor-pointer">
+                                    <i class="bi bi-pencil-square mr-1"></i>En Jours (Manuel)
+                                </button>
+                            </div>
+                        </div>
+
+                        <input type="hidden" name="duree_mode" id="duree_mode_boutique" value="preset">
+
+                        <!-- Mode 1: Prédéfinie en mois -->
+                        <div id="containerPreset_boutique">
+                            <select name="duree_jours" id="selectDureePreset_boutique" required class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none">
+                                <option value="30">1 Mois (30 jours)</option>
+                                <option value="90">3 Mois (90 jours)</option>
+                                <option value="180">6 Mois (180 jours)</option>
+                                <option value="365">1 An (365 jours)</option>
+                                <option value="99999">À Vie (Illimité)</option>
+                            </select>
+                        </div>
+
+                        <!-- Mode 2: Saisie manuelle en jours -->
+                        <div id="containerCustom_boutique" class="hidden space-y-2">
+                            <div class="relative">
+                                <input type="number" name="duree_jours_custom" id="inputDureeCustom_boutique" min="1" max="99999" placeholder="Ex: 7, 14, 45, 60..."
+                                    class="w-full pl-4 pr-16 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none">
+                                <span class="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-black text-slate-400 uppercase tracking-wider">Jours</span>
+                            </div>
+                            <div class="flex items-center gap-1.5 flex-wrap pt-1">
+                                <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mr-1">Raccourcis :</span>
+                                <button type="button" onclick="setQuickDaysBoutique(7)" class="px-2 py-0.5 bg-slate-100 hover:bg-brand-50 hover:text-brand-600 rounded-md text-[10px] font-bold text-slate-600 transition-colors cursor-pointer">7 j</button>
+                                <button type="button" onclick="setQuickDaysBoutique(14)" class="px-2 py-0.5 bg-slate-100 hover:bg-brand-50 hover:text-brand-600 rounded-md text-[10px] font-bold text-slate-600 transition-colors cursor-pointer">14 j</button>
+                                <button type="button" onclick="setQuickDaysBoutique(45)" class="px-2 py-0.5 bg-slate-100 hover:bg-brand-50 hover:text-brand-600 rounded-md text-[10px] font-bold text-slate-600 transition-colors cursor-pointer">45 j</button>
+                                <button type="button" onclick="setQuickDaysBoutique(60)" class="px-2 py-0.5 bg-slate-100 hover:bg-brand-50 hover:text-brand-600 rounded-md text-[10px] font-bold text-slate-600 transition-colors cursor-pointer">60 j</button>
+                            </div>
+                        </div>
                     </div>
                     <div>
                         <label class="block text-xs font-black uppercase tracking-widest text-slate-400 mb-2">Note Interne (Facultatif)</label>
@@ -431,6 +465,44 @@
                     btn.innerHTML = original;
                 }, 2000);
             });
+        }
+
+        function setDureeModeBoutique(mode) {
+            const inputMode = document.getElementById('duree_mode_boutique');
+            const btnPreset = document.getElementById('btnModePreset_boutique');
+            const btnCustom = document.getElementById('btnModeCustom_boutique');
+            const containerPreset = document.getElementById('containerPreset_boutique');
+            const containerCustom = document.getElementById('containerCustom_boutique');
+            const inputCustom = document.getElementById('inputDureeCustom_boutique');
+            const selectPreset = document.getElementById('selectDureePreset_boutique');
+
+            if (!inputMode) return;
+            inputMode.value = mode;
+
+            if (mode === 'custom') {
+                containerPreset.classList.add('hidden');
+                containerCustom.classList.remove('hidden');
+                btnCustom.className = 'px-2.5 py-1 rounded-lg transition-all bg-white text-brand-600 shadow-sm cursor-pointer';
+                btnPreset.className = 'px-2.5 py-1 rounded-lg transition-all text-slate-500 hover:text-slate-800 cursor-pointer';
+                inputCustom.required = true;
+                selectPreset.required = false;
+                inputCustom.focus();
+            } else {
+                containerCustom.classList.add('hidden');
+                containerPreset.classList.remove('hidden');
+                btnPreset.className = 'px-2.5 py-1 rounded-lg transition-all bg-white text-brand-600 shadow-sm cursor-pointer';
+                btnCustom.className = 'px-2.5 py-1 rounded-lg transition-all text-slate-500 hover:text-slate-800 cursor-pointer';
+                inputCustom.required = false;
+                selectPreset.required = true;
+            }
+        }
+
+        function setQuickDaysBoutique(days) {
+            const inputCustom = document.getElementById('inputDureeCustom_boutique');
+            if (inputCustom) {
+                inputCustom.value = days;
+                inputCustom.focus();
+            }
         }
     </script>
 @endsection

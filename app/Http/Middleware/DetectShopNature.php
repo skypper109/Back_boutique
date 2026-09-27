@@ -23,14 +23,19 @@ class DetectShopNature
 
         $boutiqueId = $request->header('X-Boutique-Id');
 
-        if (!$boutiqueId || $boutiqueId === 'null' || $boutiqueId === '') {
-            $boutiqueId = $user->boutique_id;
+        if (!$boutiqueId || $boutiqueId === 'null' || $boutiqueId === 'undefined' || $boutiqueId === '') {
+            $boutiqueId = $request->input('boutique_id') ?: $request->query('boutique_id') ?: $user->boutique_id;
         }
 
-        if ($boutiqueId) {
-            $boutique = \App\Models\Boutique::with('nature')->find($boutiqueId);
+        if ($boutiqueId && $boutiqueId !== 'null' && $boutiqueId !== 'undefined') {
+            $boutique = \App\Models\Boutique::with('nature')->find((int) $boutiqueId);
 
-            if ($boutique && ($user->role === 'admin' || $boutique->user_id === $user->id || $user->boutique_id == $boutiqueId)) {
+            if ($boutique && (
+                in_array($user->role, ['admin', 'admin1']) ||
+                $boutique->user_id === $user->id ||
+                $user->boutique_id == $boutiqueId ||
+                $boutique->parent_id == $user->boutique_id
+            )) {
                 // Attach to request for easy access in controllers
                 $request->attributes->set('active_boutique', $boutique);
                 

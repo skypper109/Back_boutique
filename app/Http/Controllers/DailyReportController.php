@@ -340,12 +340,8 @@ class DailyReportController extends Controller
         $user = Auth::user();
         $report = DailyReport::with('boutique')->findOrFail($id);
 
-        if ($user && $user->role !== 'admin' && $report->boutique_id !== $user->boutique_id) {
+        if ($user && !in_array($user->role, ['admin', 'admin1']) && $report->boutique_id !== $user->boutique_id) {
             return response()->json(['error' => 'Non autorisé'], 403);
-        }
-
-        if ($report->pdf_path && Storage::exists($report->pdf_path)) {
-            return Storage::download($report->pdf_path);
         }
 
         $data = $this->loadReportData($report->boutique_id, $report->date->format('Y-m-d'));
@@ -458,7 +454,7 @@ class DailyReportController extends Controller
         return $report;
     }
 
-    private function loadReportData($boutiqueId, $date)
+    public function loadReportData($boutiqueId, $date)
     {
         $boutique = Boutique::findOrFail($boutiqueId);
 

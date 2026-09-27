@@ -4,7 +4,7 @@
 
 @section('fixed_footer')
     <div class="doc-footer-fixed">
-        <div><strong>{{ $boutique->nom ?? 'MalCom' }}</strong> • Document officiel certifié conforme émis par MalCom Cloud v2.0 • Facture originale</div>
+        <div><strong>{{ $boutique->nom ?? 'MalCom' }}</strong> • {{ $boutique->footer_facture ?? 'Document officiel certifié conforme émis par MalCom Cloud v2.0 • Facture originale' }}</div>
         <div style="margin-top: 1px;">Tout retard de paiement engendre des pénalités légales conformément aux textes en vigueur de l'OHADA et de l'UEMOA.</div>
     </div>
 @endsection
@@ -14,11 +14,16 @@
     <table class="header-table">
         <tr>
             <td style="width: 58%;">
-                <div style="font-size: 14pt; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px;">
+                @if(!empty($boutique->logo))
+                    <div style="margin-bottom: 6px;">
+                        <img src="{{ $boutique->logo }}" style="max-height: 44px; max-width: 150px; object-fit: contain;">
+                    </div>
+                @endif
+                <div style="font-size: 14pt; font-weight: 900; color: {{ !empty($boutique->couleur_principale) ? $boutique->couleur_principale : '#0f172a' }}; text-transform: uppercase; letter-spacing: 0.5px;">
                     {{ $boutique->nom ?? 'MALCOM COMMERCE' }}
                 </div>
-                <div style="font-size: 7.5pt; color: #d97706; font-weight: bold; text-transform: uppercase; letter-spacing: 0.8px; margin-top: 2px;">
-                    {{ $boutique->description ?? 'Système de Gestion Commerciale' }}
+                <div style="font-size: 7.5pt; color: {{ !empty($boutique->couleur_secondaire) ? $boutique->couleur_secondaire : '#d97706' }}; font-weight: bold; text-transform: uppercase; letter-spacing: 0.8px; margin-top: 2px;">
+                    {{ $boutique->description_facture ?? $boutique->description ?? 'Système de Gestion Commerciale' }}
                 </div>
                 <div style="font-size: 7.5pt; color: #64748b; margin-top: 5px; line-height: 1.4;">
                     @if(!empty($boutique->adresse)) <div>{{ $boutique->adresse }}</div> @endif

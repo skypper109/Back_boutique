@@ -100,11 +100,16 @@
             padding: 0;
         }
 
+        @php
+            $brandPrimary = !empty($boutique->couleur_principale) ? $boutique->couleur_principale : '#0f172a';
+            $brandSecondary = !empty($boutique->couleur_secondaire) ? $boutique->couleur_secondaire : '#4f46e5';
+        @endphp
+
         .doc-title-badge {
             font-size: 14pt;
             font-weight: 900;
             letter-spacing: 1px;
-            color: #0f172a;
+            color: {{ $brandPrimary }};
             text-transform: uppercase;
             text-align: right;
             margin-bottom: 5px;
@@ -112,6 +117,9 @@
             background: transparent;
             padding: 0;
         }
+
+        .brand-primary-text { color: {{ $brandPrimary }}; }
+        .brand-secondary-text { color: {{ $brandSecondary }}; }
 
         /* Parties info (Clean 2-column layout without heavy box borders) */
         .info-card-table {

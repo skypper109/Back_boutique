@@ -52,6 +52,9 @@ class GlobalSearchController extends Controller
             // ── 1. Search Produits ───────────────────────────────────────────
             if ($mode === 'all' || $mode === 'produits') {
                 $prodLimit = ($mode === 'produits') ? 20 : 6;
+                $currentBoutique = $boutiqueId ? \App\Models\Boutique::find($boutiqueId) : null;
+                $groupBoutiques = $currentBoutique ? $currentBoutique->getGroupBoutiques()->where('id', '!=', $boutiqueId) : collect();
+
                 $prodBuilder = Produit::with(['categorie', 'stock' => function ($q) use ($boutiqueId) {
                     if ($boutiqueId) {
                         $q->where('boutique_id', $boutiqueId);
@@ -77,7 +80,7 @@ class GlobalSearchController extends Controller
 
                 $produits = $prodBuilder->orderBy('nom', 'asc')->limit($prodLimit)->get();
 
-                $results['produits'] = $produits->map(function ($p) {
+                $results['produits'] = $produits->map(function ($p) use ($groupBoutiques) {
                     $stockQte = $p->stock ? (float)$p->stock->quantite : 0;
                     $seuil = $p->stock ? (float)($p->stock->seuil_alerte ?? 5) : 5;
 
@@ -86,6 +89,46 @@ class GlobalSearchController extends Controller
                         $status = 'rupture';
                     } elseif ($stockQte <= $seuil) {
                         $status = 'faible';
+                    }
+
+                    // Aperçu d'orientation : si en rupture locale, chercher les autres filiales dispos avec adresse et contact
+                    $filialesApercu = [];
+                    if ($status === 'rupture' && $groupBoutiques->isNotEmpty()) {
+                        foreach ($groupBoutiques as $gb) {
+                            $otherStock = \App\Models\Stock::where('produit_id', $p->id)
+                                ->where('boutique_id', $gb->id)
+                                ->where('quantite', '>', 0)
+                                ->first();
+
+                            if (!$otherStock) {
+                                $matchingId = Produit::where('id', '!=', $p->id)
+                                    ->where(function ($q) use ($p) {
+                                        if (!empty($p->reference)) {
+                                            $q->where('reference', $p->reference);
+                                        }
+                                        $q->orWhereRaw('LOWER(TRIM(nom)) = ?', [strtolower(trim($p->nom))]);
+                                    })
+                                    ->pluck('id');
+
+                                if ($matchingId->isNotEmpty()) {
+                                    $otherStock = \App\Models\Stock::whereIn('produit_id', $matchingId)
+                                        ->where('boutique_id', $gb->id)
+                                        ->where('quantite', '>', 0)
+                                        ->first();
+                                }
+                            }
+
+                            if ($otherStock && $otherStock->quantite > 0) {
+                                $filialesApercu[] = [
+                                    'boutique_id' => $gb->id,
+                                    'nom' => $gb->nom,
+                                    'adresse' => $gb->adresse ?: 'Adresse non renseignée',
+                                    'telephone' => $gb->telephone ?: 'Non renseigné',
+                                    'quantite' => (float)$otherStock->quantite,
+                                    'prix_vente' => (float)($otherStock->prix_vente ?: $p->prix_detail)
+                                ];
+                            }
+                        }
                     }
 
                     return [
@@ -98,7 +141,9 @@ class GlobalSearchController extends Controller
                         'stock_restant' => $stockQte,
                         'stock_status' => $status,
                         'image' => $p->image ?: 'assets/img/produit/default.png',
-                        'nature_slug' => $p->config['nature'] ?? 'default'
+                        'nature_slug' => $p->config['nature'] ?? 'default',
+                        'filiales_disponibles' => $filialesApercu,
+                        'total_stock_filiales' => array_sum(array_column($filialesApercu, 'quantite')),
                     ];
                 });
             }
@@ -123,6 +168,10 @@ class GlobalSearchController extends Controller
                 }
 
                 if ($boutiqueId) {
+                    $clientBuilder->whereHas('ventes', function ($q) use ($boutiqueId) {
+                        $q->where('boutique_id', $boutiqueId);
+                    });
+
                     $clientBuilder->withSum(['ventes as total_dette' => function ($q) use ($boutiqueId) {
                         $q->where('boutique_id', $boutiqueId)
                         ->where('type_paiement', 'credit');

@@ -211,6 +211,124 @@
         </tfoot>
     </table>
 
+    <!-- Section III: Audit de Caisse & Rapprochement Physique (Z de Caisse) -->
+    <div style="font-size: 8pt; font-weight: 900; color: #0f172a; text-transform: uppercase; margin-top: 10px; margin-bottom: 3px;">
+        III. Rapprochement des Espèces & Clôture de Caisse (Ticket Z)
+    </div>
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 10px; font-size: 8pt;">
+        <tr>
+            <td style="width: 50%; vertical-align: top; padding-right: 6px;">
+                <table class="table-data" style="margin: 0;">
+                    <thead>
+                        <tr>
+                            <th colspan="2" style="text-align: left; background-color: #f1f5f9;">FLUX DE TRÉSORERIE EN ESPÈCES</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td style="color: #475569;">Fond de Caisse Initial :</td>
+                            <td style="text-align: right; font-weight: bold; font-family: monospace;">
+                                {{ number_format($report->fond_de_caisse ?? ($fond_de_caisse ?? 0), 0, ',', ' ') }} F
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="color: #475569;">(+) Ventes Encaissées en Espèces :</td>
+                            <td style="text-align: right; font-weight: bold; color: #047857; font-family: monospace;">
+                                + {{ number_format($totaux['especes_ventes'] ?? 0, 0, ',', ' ') }} F
+                            </td>
+                        </tr>
+                        @if (($totaux['recouvrement_especes'] ?? 0) > 0)
+                        <tr>
+                            <td style="color: #475569;">(+) Règlements de Crédits (Espèces) :</td>
+                            <td style="text-align: right; font-weight: bold; color: #047857; font-family: monospace;">
+                                + {{ number_format($totaux['recouvrement_especes'], 0, ',', ' ') }} F
+                            </td>
+                        </tr>
+                        @endif
+                        <tr>
+                            <td style="color: #475569;">(-) Dépenses Payées en Espèces :</td>
+                            <td style="text-align: right; font-weight: bold; color: #be123c; font-family: monospace;">
+                                - {{ number_format($totaux['depenses_especes'] ?? 0, 0, ',', ' ') }} F
+                            </td>
+                        </tr>
+                        <tr style="background-color: #f8fafc; font-weight: bold;">
+                            <td style="color: #0f172a;">SOLDE THÉORIQUE EN CAISSE :</td>
+                            <td style="text-align: right; font-weight: 900; font-family: monospace;">
+                                {{ number_format($report->total_especes_theorique ?? ($total_especes_theorique ?? 0), 0, ',', ' ') }} F
+                            </td>
+                        </tr>
+                        <tr style="background-color: #eff6ff; font-weight: bold;">
+                            <td style="color: #1e40af;">ESPÈCES PHYSIQUES COMPTÉES :</td>
+                            <td style="text-align: right; font-weight: 900; color: #1e40af; font-family: monospace;">
+                                {{ number_format($report->total_especes_physique ?? ($total_especes_physique ?? 0), 0, ',', ' ') }} F
+                            </td>
+                        </tr>
+                        @php
+                            $ecart = $report->ecart_caisse ?? ($ecart_caisse ?? 0);
+                        @endphp
+                        <tr style="background-color: {{ $ecart == 0 ? '#ecfdf5' : ($ecart > 0 ? '#eff6ff' : '#fff1f2') }};">
+                            <td style="font-weight: 900; color: {{ $ecart == 0 ? '#065f46' : ($ecart > 0 ? '#1e40af' : '#9f1239') }};">
+                                ÉCART DE CAISSE CONSTATÉ :
+                            </td>
+                            <td style="text-align: right; font-weight: 900; font-family: monospace; color: {{ $ecart == 0 ? '#065f46' : ($ecart > 0 ? '#1e40af' : '#9f1239') }};">
+                                {{ $ecart > 0 ? '+' : '' }}{{ number_format($ecart, 0, ',', ' ') }} F
+                                <span style="font-size: 6.5pt;">({{ $ecart == 0 ? 'Équilibré' : ($ecart > 0 ? 'Excédent' : 'Déficit') }})</span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </td>
+
+            <td style="width: 50%; vertical-align: top; padding-left: 6px;">
+                <table class="table-data" style="margin: 0;">
+                    <thead>
+                        <tr>
+                            <th colspan="2" style="text-align: left; background-color: #f1f5f9;">AUTRES MODES DE RÈGLEMENT</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td style="color: #475569;">Orange Money :</td>
+                            <td style="text-align: right; font-weight: bold; font-family: monospace;">
+                                {{ number_format($totaux['orange_money'] ?? 0, 0, ',', ' ') }} F
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="color: #475569;">Moov Money :</td>
+                            <td style="text-align: right; font-weight: bold; font-family: monospace;">
+                                {{ number_format($totaux['moov_money'] ?? 0, 0, ',', ' ') }} F
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="color: #475569;">Wave :</td>
+                            <td style="text-align: right; font-weight: bold; font-family: monospace;">
+                                {{ number_format($totaux['wave'] ?? 0, 0, ',', ' ') }} F
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="color: #475569;">Cartes / Chèques / Virements :</td>
+                            <td style="text-align: right; font-weight: bold; font-family: monospace;">
+                                {{ number_format($totaux['carte_bancaire'] ?? 0, 0, ',', ' ') }} F
+                            </td>
+                        </tr>
+                        <tr>
+                            <td style="color: #475569;">Ventes Émises à Crédit :</td>
+                            <td style="text-align: right; font-weight: bold; color: #d97706; font-family: monospace;">
+                                {{ number_format($totaux['ventes_credit_net'] ?? 0, 0, ',', ' ') }} F
+                            </td>
+                        </tr>
+                        <tr style="background-color: #f8fafc; font-weight: bold;">
+                            <td style="color: #0f172a;">CLÔTURÉ PAR :</td>
+                            <td style="text-align: right; font-weight: bold; color: #475569;">
+                                {{ $report->cloturePar->name ?? (Auth::user()->name ?? 'Caissier') }}
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </td>
+        </tr>
+    </table>
+
     <!-- Dual Signatures Block (Pinned to bottom of the last page) -->
     <div class="signatures-pinned-bottom">
         <table class="signatures-table">

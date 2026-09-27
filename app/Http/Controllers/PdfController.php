@@ -17,7 +17,7 @@ class PdfController extends Controller
     public function generatePdf(Request $request)
     {
         $request->validate([
-            'type' => 'required|in:facture,bordereau,recu_credit,inventaire,rapport_journalier,journal,grand_livre,balance,compte_resultat,bilan',
+            'type' => 'required|in:facture,bordereau,proforma,recu_credit,inventaire,rapport_journalier,journal,grand_livre,balance,compte_resultat,bilan',
             'id' => 'nullable|integer',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date',
@@ -37,6 +37,7 @@ class PdfController extends Controller
             $template = match($type) {
                 'facture' => 'pdf.facture',
                 'bordereau' => 'pdf.bordereau',
+                'proforma' => 'pdf.proforma',
                 'recu_credit' => 'pdf.recu_credit',
                 'inventaire' => 'pdf.inventaire',
                 'rapport_journalier' => 'pdf.rapport_journalier',
@@ -150,6 +151,19 @@ class PdfController extends Controller
                     'date' => now()
                 ];
             case 'bordereau':
+                $vente = Vente::with(['detailVentes.produit', 'client', 'user', 'boutique'])
+                    ->when($boutiqueId, fn($q) => $q->where('boutique_id', $boutiqueId))
+                    ->findOrFail($id);
+                $strategy = \App\Services\NatureStrategyFactory::make($vente->boutique);
+                return [
+                    'vente' => $vente,
+                    'boutique' => $vente->boutique,
+                    'strategy' => $strategy,
+                    'type' => $type,
+                    'date' => now()
+                ];
+
+            case 'proforma':
                 $vente = Vente::with(['detailVentes.produit', 'client', 'user', 'boutique'])
                     ->when($boutiqueId, fn($q) => $q->where('boutique_id', $boutiqueId))
                     ->findOrFail($id);

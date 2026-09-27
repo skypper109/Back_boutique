@@ -931,17 +931,23 @@ class VenteController extends Controller
             $vente->client_id = $client_id;
             $vente->boutique_id = $boutique_id;
             $vente->user_id = $user->id;
-            $vente->montant_total = $request->montant_total;
-            $vente->type_paiement = $is_proforma ? 'proforma' : ($request->type_paiement ?? 'contant');
+            $rawType = $is_proforma ? 'proforma' : ($request->type_paiement ?? 'contant');
+            $vente->type_paiement = $rawType;
+            $vente->moyen_paiement = $request->input('moyen_paiement', ($rawType === 'credit' ? 'credit' : ($rawType === 'proforma' ? 'proforma' : $rawType)));
+            $vente->montant_recu = $request->input('montant_recu', 0);
+            $vente->monnaie_rendue = $request->input('monnaie_rendue', 0);
             $vente->montant_avance = $request->montant_avance ?? 0;
+
+            $vente->montant_total = $request->montant_total;
 
             if ($is_proforma) {
                 $vente->statut = 'proforma';
+                $vente->remise = $request->remise ?? 0;
                 $vente->montant_restant = $request->montant_total;
             } else {
                 $vente->remise = $request->remise ?? 0;
-                $vente->statut = ($vente->type_paiement === 'credit') ? 'credit' : 'payee';
-                $vente->montant_restant = ($vente->type_paiement === 'credit')
+                $vente->statut = ($rawType === 'credit') ? 'credit' : 'payee';
+                $vente->montant_restant = ($rawType === 'credit')
                     ? ($request->montant_total - $vente->montant_avance)
                     : 0;
             } 
@@ -1114,6 +1120,9 @@ class VenteController extends Controller
                 $vente->user_id = $user->id;
                 $vente->montant_total = $vData['montant_total'];
                 $vente->type_paiement = $typePaiement;
+                $vente->moyen_paiement = $vData['moyen_paiement'] ?? ($typePaiement === 'credit' ? 'credit' : $typePaiement);
+                $vente->montant_recu = $vData['montant_recu'] ?? 0;
+                $vente->monnaie_rendue = $vData['monnaie_rendue'] ?? 0;
                 $vente->montant_avance = $vData['montant_avance'] ?? 0;
                 $vente->remise = $vData['remise'] ?? 0;
                 $vente->statut = ($typePaiement === 'credit') ? 'credit' : 'payee';
@@ -1274,11 +1283,15 @@ class VenteController extends Controller
             }
 
             // 2. Update Vente Identity
-            $vente->type_paiement = $type_paiement;
+            $rawType = $request->input('type_paiement', 'contant');
+            $vente->type_paiement = $rawType;
+            $vente->moyen_paiement = $request->input('moyen_paiement', $rawType);
+            $vente->montant_recu = $request->input('montant_recu', 0);
+            $vente->monnaie_rendue = $request->input('monnaie_rendue', 0);
             $vente->remise = $vente->detailVentes->sum('remise');
             $vente->montant_avance = $montant_avance;
-            $vente->statut = ($type_paiement === 'credit') ? 'credit' : 'payee';
-            $vente->montant_restant = ($type_paiement === 'credit')
+            $vente->statut = ($rawType === 'credit') ? 'credit' : 'payee';
+            $vente->montant_restant = ($rawType === 'credit')
                 ? ($vente->montant_total - $montant_avance)
                 : 0;
             $vente->date_vente = now()->format('Y-m-d');

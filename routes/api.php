@@ -13,7 +13,7 @@ use App\Http\Controllers\BoutiqueController;
 use App\Http\Controllers\AnneeController;
 use App\Http\Controllers\UserStatusController;
 use App\Http\Controllers\LicenceController;
-use App\Http\Controllers\{CreditController,ExpenseController};
+use App\Http\Controllers\{CreditController,ExpenseController,TransfertController};
 use App\Http\Controllers\GlobalSearchController;
 
 // Auth Routes
@@ -94,9 +94,15 @@ Route::middleware(['auth:sanctum', 'check.user.active', 'check.boutique.active']
         Route::get('facturations/{annee?}', [FactureController::class, 'index']);
         Route::get('facture/{id}', [FactureController::class, 'detailFacture']);
 
-        // Clients
-        Route::get('clients', [ClientController::class, 'index']);
+        // Clients & CRM (Axe 3)
+        Route::get('clients/aging-balance', [ClientController::class, 'agingReport']);
+        Route::get('clients/fidele', [ClientController::class, 'clientFidele']);
         Route::get('clientsfidele', [ClientController::class, 'clientFidele']);
+        Route::get('clients', [ClientController::class, 'index']);
+        Route::post('clients', [ClientController::class, 'store']);
+        Route::get('clients/{id}', [ClientController::class, 'show'])->whereNumber('id');
+        Route::put('clients/{id}', [ClientController::class, 'update'])->whereNumber('id');
+        Route::delete('clients/{id}', [ClientController::class, 'destroy'])->whereNumber('id');
         Route::get('clients/{annee}', [ClientController::class, 'clientAnnee']);
 
         // Boutiques
@@ -119,6 +125,16 @@ Route::middleware(['auth:sanctum', 'check.user.active', 'check.boutique.active']
         Route::get('proformas', [VenteController::class, 'getProformas']);
         Route::post('proformas/{id}/convert', [VenteController::class, 'convertProformaToSale']);
 
+        // Transferts Inter-Boutiques (Axe 2)
+        Route::get('transferts/boutiques', [TransfertController::class, 'getAccessibleBoutiques']);
+        Route::get('transferts', [TransfertController::class, 'index']);
+        Route::get('transferts/{id}', [TransfertController::class, 'show']);
+        Route::post('transferts', [TransfertController::class, 'store']);
+
+        // Valorisation du Stock & Régularisation des Écarts (Axe 2)
+        Route::get('stocks/valuation', [TransfertController::class, 'stockValuation']);
+        Route::post('stocks/adjustment', [TransfertController::class, 'stockAdjustment']);
+
         // Expenses Routes
 
         Route::get('/expenses/dashboard', [ExpenseController::class, 'dashboard']);
@@ -130,12 +146,19 @@ Route::middleware(['auth:sanctum', 'check.user.active', 'check.boutique.active']
         Route::post('/pdf/generate', [App\Http\Controllers\PdfController::class, 'generatePdf']);
         Route::get('/pdf/preview/{type}/{id}', [App\Http\Controllers\PdfController::class, 'previewPdf']);
 
-        // Daily Reports Routes
+        // Daily Reports & Caisse Routes (Axe 4)
+        Route::get('/caisse/session-status', [App\Http\Controllers\DailyReportController::class, 'sessionStatus']);
+        Route::post('/caisse/cloturer', [App\Http\Controllers\DailyReportController::class, 'cloturerCaisse']);
+        Route::get('/caisse/ticket-z/{id}', [App\Http\Controllers\DailyReportController::class, 'ticketZ']);
+
         Route::prefix('rapports')->group(function () {
             Route::get('/', [App\Http\Controllers\DailyReportController::class, 'index']);
+            Route::get('/session-status', [App\Http\Controllers\DailyReportController::class, 'sessionStatus']);
+            Route::post('/cloturer', [App\Http\Controllers\DailyReportController::class, 'cloturerCaisse']);
             Route::post('/generer', [App\Http\Controllers\DailyReportController::class, 'generate']);
             Route::get('/{id}', [App\Http\Controllers\DailyReportController::class, 'show']);
             Route::get('/{id}/download', [App\Http\Controllers\DailyReportController::class, 'download']);
+            Route::get('/{id}/ticket-z', [App\Http\Controllers\DailyReportController::class, 'ticketZ']);
             Route::post('/{id}/envoyer', [App\Http\Controllers\DailyReportController::class, 'sendEmail']);
             Route::post('/{id}/whatsapp', [App\Http\Controllers\DailyReportController::class, 'sendWhatsApp']);
         });
@@ -157,6 +180,12 @@ Route::middleware(['auth:sanctum', 'check.user.active', 'check.boutique.active']
             Route::get('/grand-livre', [\App\Http\Controllers\ComptabiliteController::class, 'grandLivre']);
             Route::get('/compte-resultat', [\App\Http\Controllers\ComptabiliteController::class, 'compteResultat']);
             Route::get('/bilan', [\App\Http\Controllers\ComptabiliteController::class, 'bilan']);
+        });
+
+        // Sauvegarde de la Base de Données (Axe 5)
+        Route::prefix('backup')->group(function () {
+            Route::get('/stats', [\App\Http\Controllers\BackupController::class, 'stats']);
+            Route::get('/download', [\App\Http\Controllers\BackupController::class, 'downloadSql']);
         });
 
     });

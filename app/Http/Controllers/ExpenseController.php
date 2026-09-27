@@ -14,11 +14,21 @@ class ExpenseController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Expense::query();
-        
         $boutiqueId = $this->getBoutiqueId() ?: $request->boutique_id;
+        $query = Expense::with('user');
+        
         if ($boutiqueId) {
             $query->where('boutique_id', $boutiqueId);
+        }
+
+        if ($request->has('search') && !empty($request->search)) {
+            $s = trim($request->search);
+            $query->where(function ($q) use ($s) {
+                $q->where('type', 'LIKE', "%{$s}%")
+                  ->orWhere('description', 'LIKE', "%{$s}%")
+                  ->orWhere('beneficiaire', 'LIKE', "%{$s}%")
+                  ->orWhere('reference_piece', 'LIKE', "%{$s}%");
+            });
         }
 
         if ($request->has('month') && $request->month) {
@@ -30,8 +40,11 @@ class ExpenseController extends Controller
         if ($request->has('type') && $request->type) {
             $query->where('type', $request->type);
         }
+        if ($request->has('mode_paiement') && $request->mode_paiement) {
+            $query->where('mode_paiement', $request->mode_paiement);
+        }
 
-        return response()->json($query->orderByDesc('date')->paginate(20));
+        return response()->json($query->orderByDesc('date')->orderByDesc('id')->paginate(20));
     }
 
     /**
@@ -47,6 +60,9 @@ class ExpenseController extends Controller
         $fields = $request->validate([
             'type' => 'required|string',
             'montant' => 'required|numeric|min:0',
+            'mode_paiement' => 'nullable|string',
+            'reference_piece' => 'nullable|string|max:100',
+            'beneficiaire' => 'nullable|string|max:191',
             'description' => 'nullable|string',
             'date' => 'required|date',
             'boutique_id' => 'nullable|exists:boutiques,id',
@@ -54,11 +70,16 @@ class ExpenseController extends Controller
 
         $fields['boutique_id'] = $boutiqueId;
         $fields['user_id'] = Auth::id();
+        $fields['mode_paiement'] = $fields['mode_paiement'] ?: 'especes';
 
         $expense = Expense::create($fields);
 
-        // Écriture comptable automatique SYSCOHADA (Débit Charges Classe 6, Crédit Caisse)
-        app(\App\Services\ComptaService::class)->enregistrerDepense($expense);
+        // Écriture comptable automatique SYSCOHADA (Débit Charges Classe 6, Crédit Caisse/Banque)
+        try {
+            app(\App\Services\ComptaService::class)->enregistrerDepense($expense);
+        } catch (\Exception $e) {
+            // Continuer même si la compta n'est pas initialisée
+        }
 
         return response()->json($expense, 201);
     }
@@ -68,7 +89,7 @@ class ExpenseController extends Controller
      */
     public function show(Expense $expense)
     {
-        return response()->json($expense);
+        return response()->json($expense->load(['user', 'boutique']));
     }
 
     /**
@@ -79,21 +100,29 @@ class ExpenseController extends Controller
         $fields = $request->validate([
             'type' => 'required|string',
             'montant' => 'required|numeric|min:0',
+            'mode_paiement' => 'nullable|string',
+            'reference_piece' => 'nullable|string|max:100',
+            'beneficiaire' => 'nullable|string|max:191',
             'description' => 'nullable|string',
             'date' => 'required|date',
         ]);
 
-        $comptaService = app(\App\Services\ComptaService::class);
-        // Contre-passation de l'ancienne version
-        $comptaService->enregistrerAnnulationDepense($expense);
-        \App\Models\EcritureComptable::where('source_type', 'Expense')
-            ->where('source_id', $expense->id)
-            ->delete();
+        $fields['mode_paiement'] = $fields['mode_paiement'] ?: ($expense->mode_paiement ?: 'especes');
+
+        try {
+            $comptaService = app(\App\Services\ComptaService::class);
+            $comptaService->enregistrerAnnulationDepense($expense);
+            \App\Models\EcritureComptable::where('source_type', 'Expense')
+                ->where('source_id', $expense->id)
+                ->delete();
+        } catch (\Exception $e) {}
 
         $expense->update($fields);
 
-        // Enregistrement de l'écriture rectifiée
-        $comptaService->enregistrerDepense($expense);
+        try {
+            $comptaService = app(\App\Services\ComptaService::class);
+            $comptaService->enregistrerDepense($expense);
+        } catch (\Exception $e) {}
 
         return response()->json($expense);
     }
@@ -103,11 +132,12 @@ class ExpenseController extends Controller
      */
     public function destroy(Expense $expense)
     {
-        // SYSCOHADA : Contre-passation de la dépense annulée
-        app(\App\Services\ComptaService::class)->enregistrerAnnulationDepense($expense);
+        try {
+            app(\App\Services\ComptaService::class)->enregistrerAnnulationDepense($expense);
+        } catch (\Exception $e) {}
         
         $expense->delete();
-        return response()->json(['message' => 'Dépense supprimée']);
+        return response()->json(['message' => 'Dépense supprimée avec succès']);
     }
 
     public function dashboard(Request $request)
@@ -120,8 +150,10 @@ class ExpenseController extends Controller
         }
 
         $year = $request->get('year', date('Y'));
+        $month = $request->get('month', date('m'));
         
         $totalByYear = (clone $query)->whereYear('date', $year)->sum('montant');
+        $totalByMonth = (clone $query)->whereYear('date', $year)->whereMonth('date', $month)->sum('montant');
         
         $monthlyEvolution = (clone $query)->whereYear('date', $year)
             ->selectRaw('MONTH(date) as month, SUM(montant) as total')
@@ -130,15 +162,24 @@ class ExpenseController extends Controller
             ->get();
 
         $breakdownByType = (clone $query)->whereYear('date', $year)
-            ->selectRaw('type, SUM(montant) as total')
+            ->selectRaw('type, SUM(montant) as total, COUNT(*) as count')
             ->groupBy('type')
+            ->orderByDesc('total')
+            ->get();
+
+        $breakdownByMode = (clone $query)->whereYear('date', $year)
+            ->selectRaw('COALESCE(mode_paiement, "especes") as mode, SUM(montant) as total')
+            ->groupBy('mode')
             ->get();
 
         return response()->json([
             'total_year' => (float)($totalByYear ?? 0),
+            'total_month' => (float)($totalByMonth ?? 0),
             'monthly_evolution' => $monthlyEvolution ?? [],
             'breakdown_by_type' => $breakdownByType ?? [],
-            'year' => $year ?? date('Y')
+            'breakdown_by_mode' => $breakdownByMode ?? [],
+            'year' => $year ?? date('Y'),
+            'month' => $month ?? date('m')
         ]);
     }
 }

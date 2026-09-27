@@ -67,15 +67,24 @@ class FactureController extends Controller
         $nomBoutique = 'Ma Boutique';
         $adresseBoutique = '-----';
         $telephoneBoutique = '-----';
+        $footerFacture = 'Merci de votre visite !';
+        $boutique = null;
 
-        if ($facture->factureVentes->isNotEmpty() && $facture->factureVentes->first()->vente) {
-            $boutique = $facture->factureVentes->first()->vente->boutique;
+        $firstVente = $facture->factureVentes->isNotEmpty() ? $facture->factureVentes->first()->vente : null;
+        if ($firstVente) {
+            $boutique = $firstVente->boutique;
             if ($boutique) {
                 $nomBoutique = $boutique->nom ?? 'Ma Boutique';
                 $adresseBoutique = $boutique->adresse ?? '-----';
                 $telephoneBoutique = $boutique->telephone ?? '-----';
+                $footerFacture = $boutique->footer_facture ?? 'Merci de votre visite !';
             }
         }
+
+        $moyenPaiement = $firstVente ? ($firstVente->moyen_paiement ?: $firstVente->type_paiement) : ($facture->statut ?? 'especes');
+        $montantRecu = $firstVente ? ($firstVente->montant_recu ?? 0) : 0;
+        $monnaieRendue = $firstVente ? ($firstVente->monnaie_rendue ?? 0) : 0;
+        $nomCaissier = ($firstVente && $firstVente->user) ? $firstVente->user->name : 'Caissier';
 
         $response = [
             'nomClient' => $facture->client->nom,
@@ -83,9 +92,14 @@ class FactureController extends Controller
             'adresseClient' => $facture->client->adresse ?? 'N/A',
             'dateFacture' => $facture->date_facturation,
             'montant_total' => $facture->montant_total,
-            'montant_remis' => $facture->factureVentes->first()->vente->detailVentes->first()->remise ?? 0,
+            'montant_remis' => $firstVente ? ($firstVente->remise ?: ($firstVente->detailVentes->first()->remise ?? 0)) : 0,
             'montant_avance' => $totalAvance,
             'montant_restant' => $totalRestant,
+            'moyen_paiement' => $moyenPaiement,
+            'montant_recu' => $montantRecu,
+            'monnaie_rendue' => $monnaieRendue,
+            'nomCaissier' => $nomCaissier,
+            'footerFacture' => $footerFacture,
             'nomBoutique' => $nomBoutique,
             'statut' => $facture->statut,
             'adresseBoutique' => $adresseBoutique,

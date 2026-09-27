@@ -61,9 +61,10 @@ class GlobalSearchController extends Controller
                     }
                 }]);
 
-                if ($boutiqueId) {
-                    $prodBuilder->whereHas('stock', function ($q) use ($boutiqueId) {
-                        $q->where('boutique_id', $boutiqueId);
+                $groupBoutiqueIds = $currentBoutique ? $currentBoutique->getGroupBoutiqueIds() : ($boutiqueId ? [$boutiqueId] : []);
+                if (!empty($groupBoutiqueIds)) {
+                    $prodBuilder->whereHas('stocks', function ($q) use ($groupBoutiqueIds) {
+                        $q->whereIn('boutique_id', $groupBoutiqueIds);
                     });
                 }
 

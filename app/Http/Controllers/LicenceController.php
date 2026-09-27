@@ -113,7 +113,9 @@ class LicenceController extends Controller
             'boutique_nom' => $boutique->nom,
             'is_active' => (bool) $boutique->is_active,
             'is_expired' => $boutique->isLicenceExpired(),
+            'is_unlimited' => $boutique->hasUnlimitedLicence(),
             'date_expiration' => $boutique->date_expiration_licence,
+            'date_expiration_formatee' => $boutique->date_expiration_licence ? \Carbon\Carbon::parse($boutique->date_expiration_licence)->format('d/m/Y') : null,
             'jours_restants' => $boutique->joursRestants(),
         ], 200);
     }

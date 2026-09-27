@@ -97,8 +97,12 @@ class Boutique extends Model
             return 0;
         }
 
-        $diff = (int) now()->diffInDays($this->date_expiration_licence, false);
-        return max(0, $diff);
+        $diffHours = now()->diffInHours($this->date_expiration_licence, false);
+        if ($diffHours <= 0) {
+            return 0;
+        }
+
+        return (int) ceil($diffHours / 24);
     }
 
     /**

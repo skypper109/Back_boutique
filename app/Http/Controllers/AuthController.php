@@ -67,6 +67,9 @@ class AuthController extends Controller
             'user_role' => $user->role,
             'boutique_id' => $user->boutique_id ?: (\App\Models\Boutique::first()?->id),
             'date_expiration' => $boutique?->date_expiration_licence,
+            'date_expiration_formatee' => $boutique?->date_expiration_licence ? \Carbon\Carbon::parse($boutique->date_expiration_licence)->format('d/m/Y') : null,
+            'is_unlimited' => $boutique?->hasUnlimitedLicence() ?? false,
+            'jours_restants' => $boutique?->joursRestants(),
             'access_token' => $token
         ], 201);
     }

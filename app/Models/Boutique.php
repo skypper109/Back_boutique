@@ -16,6 +16,7 @@ class Boutique extends Model
         'email',
         'is_active',
         'user_id',
+        'parent_id',
         'logo',
         'description_facture',
         'description_bordereau',
@@ -41,11 +42,49 @@ class Boutique extends Model
         return $this->hasMany(Licence::class)->orderByDesc('created_at');
     }
 
+    public function parent()
+    {
+        return $this->belongsTo(Boutique::class, 'parent_id');
+    }
+
+    public function filiales()
+    {
+        return $this->hasMany(Boutique::class, 'parent_id');
+    }
+
     /**
-     * Vérifie si la boutique a une licence illimitée active
+     * Retourne la boutique principale (racine du groupe d'établissements).
+     * Si la boutique courante est déjà principale, elle se retourne elle-même.
+     */
+    public function getRootBoutique(): Boutique
+    {
+        if ($this->parent_id) {
+            $parent = $this->parent ?: Boutique::find($this->parent_id);
+            if ($parent && $parent->id !== $this->id) {
+                return $parent->getRootBoutique();
+            }
+        }
+        return $this;
+    }
+
+    /**
+     * Indique si cette boutique est une filiale rattachée à une boutique principale
+     */
+    public function isFiliale(): bool
+    {
+        return !is_null($this->parent_id);
+    }
+
+    /**
+     * Vérifie si la boutique (ou sa boutique principale de groupe) a une licence illimitée active
      */
     public function hasUnlimitedLicence(): bool
     {
+        $root = $this->getRootBoutique();
+        if ($root->id !== $this->id) {
+            return $root->hasUnlimitedLicence();
+        }
+
         return $this->licences()
             ->where('statut', 'active')
             ->where('duree_jours', '>=', 90000)
@@ -53,10 +92,16 @@ class Boutique extends Model
     }
 
     /**
-     * Vérifie si la licence de la boutique a expiré ou n'est plus valide
+     * Vérifie si la licence de la boutique (ou de son groupe) a expiré ou n'est plus valide.
+     * Pour une filiale, la validité dépend STRICTEMENT de l'état de sa boutique principale.
      */
     public function isLicenceExpired(): bool
     {
+        $root = $this->getRootBoutique();
+        if ($root->id !== $this->id) {
+            return $root->isLicenceExpired();
+        }
+
         if (!$this->is_active) {
             return true;
         }
@@ -89,6 +134,11 @@ class Boutique extends Model
      */
     public function joursRestants(): ?int
     {
+        $root = $this->getRootBoutique();
+        if ($root->id !== $this->id) {
+            return $root->joursRestants();
+        }
+
         if ($this->hasUnlimitedLicence()) {
             return null;
         }
@@ -106,15 +156,22 @@ class Boutique extends Model
     }
 
     /**
-     * Recalcule et synchronise l'état de la licence de la boutique
-     * en fonction de ses licences réelles actives.
+     * Recalcule et synchronise l'état de la licence de la boutique principale,
+     * et propage immédiatement l'état sur toutes ses filiales.
      */
     public function recalculerLicence(): void
     {
+        $root = $this->getRootBoutique();
+        if ($root->id !== $this->id) {
+            $root->recalculerLicence();
+            return;
+        }
+
         // 1. Licence illimitée active ?
         if ($this->hasUnlimitedLicence()) {
             $this->date_expiration_licence = null;
             $this->save();
+            $this->syncLicenceToFiliales();
             return;
         }
 
@@ -128,6 +185,7 @@ class Boutique extends Model
             // Aucune licence active : date d'expiration passée pour bloquer l'accès
             $this->date_expiration_licence = now()->subMinute();
             $this->save();
+            $this->syncLicenceToFiliales();
             return;
         }
 
@@ -140,6 +198,18 @@ class Boutique extends Model
         }
 
         $this->save();
+        $this->syncLicenceToFiliales();
+    }
+
+    /**
+     * Propage la date d'expiration et le statut actif sur l'ensemble des filiales
+     */
+    public function syncLicenceToFiliales(): void
+    {
+        $this->filiales()->update([
+            'date_expiration_licence' => $this->date_expiration_licence,
+            'is_active' => $this->is_active,
+        ]);
     }
 
     public function nature()

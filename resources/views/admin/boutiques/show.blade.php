@@ -16,6 +16,15 @@
                         <span class="px-3 py-1 bg-brand-50 text-brand-700 rounded-xl text-xs font-black uppercase tracking-wider border border-brand-200 shadow-sm">
                             {{ $boutique->nature?->name ?? 'Commerce Général' }}
                         </span>
+                        @if ($boutique->isFiliale())
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-700 rounded-xl text-xs font-black uppercase tracking-wider border border-amber-200 shadow-sm">
+                                <i class="bi bi-arrow-return-right"></i> Filiale de {{ $boutique->parent?->nom ?? 'Boutique Principale' }}
+                            </span>
+                        @elseif ($boutique->filiales && $boutique->filiales->count() > 0)
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50 text-indigo-700 rounded-xl text-xs font-black uppercase tracking-wider border border-indigo-200 shadow-sm">
+                                <i class="bi bi-diagram-3-fill"></i> Principale ({{ $boutique->filiales->count() }} filiale{{ $boutique->filiales->count() > 1 ? 's' : '' }})
+                            </span>
+                        @endif
                         @if ($boutique->is_active)
                             <span class="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full text-xs font-black border border-emerald-200">
                                 <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -177,6 +186,34 @@
                 </div>
             </div>
 
+            <!-- Group Context Banner -->
+            @if ($boutique->isFiliale() && $boutique->parent)
+                <div class="p-4 mb-6 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-semibold flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div class="flex items-center gap-2">
+                        <i class="bi bi-info-circle-fill text-amber-600 text-base"></i>
+                        <span>Cette boutique est une <strong>filiale</strong> rattachée au groupe : <strong>{{ $boutique->parent->nom }}</strong>. L'activation et l'expiration de sa licence dépendent de la boutique principale.</span>
+                    </div>
+                    <a href="{{ route('admin.boutiques.show', $boutique->parent->id) }}" class="px-3 py-1.5 bg-white text-amber-800 rounded-xl font-bold border border-amber-200 hover:bg-amber-100 transition-colors shadow-sm whitespace-nowrap">
+                        Voir Boutique Principale
+                    </a>
+                </div>
+            @elseif ($boutique->filiales && $boutique->filiales->count() > 0)
+                <div class="p-4 mb-6 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs font-semibold">
+                    <div class="flex items-center gap-2 mb-2">
+                        <i class="bi bi-diagram-3-fill text-indigo-600 text-base"></i>
+                        <span>Boutique Principale d'un groupe de <strong>{{ $boutique->filiales->count() }} filiale(s)</strong>. Toute prolongation ou activation de clé s'applique automatiquement à l'ensemble du réseau ci-dessous :</span>
+                    </div>
+                    <div class="flex flex-wrap gap-2 pt-1">
+                        @foreach($boutique->filiales as $filiale)
+                            <a href="{{ route('admin.boutiques.show', $filiale->id) }}" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white border border-indigo-200 text-indigo-800 font-bold hover:bg-indigo-100 transition-colors">
+                                <span class="w-1.5 h-1.5 rounded-full {{ $filiale->is_active && !$filiale->isLicenceExpired() ? 'bg-emerald-500' : 'bg-rose-500' }}"></span>
+                                {{ $filiale->nom }}
+                            </a>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
+
             <!-- Licences Quick Status Tiles -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 py-6 border-b border-slate-100">
                 <div class="p-5 bg-slate-50 rounded-2xl border border-slate-100">
@@ -293,6 +330,17 @@
                 <form action="{{ route('admin.licences.store') }}" method="POST" class="space-y-4">
                     @csrf
                     <input type="hidden" name="boutique_id" value="{{ $boutique->id }}">
+                    @if ($boutique->isFiliale())
+                        <div class="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-800 text-[11px] font-semibold flex items-center gap-2">
+                            <i class="bi bi-info-circle-fill text-amber-600"></i>
+                            <span>Cette clé sera rattachée à la boutique principale (<strong>{{ $boutique->parent?->nom }}</strong>) et couvrira l'ensemble du groupe.</span>
+                        </div>
+                    @elseif ($boutique->filiales && $boutique->filiales->count() > 0)
+                        <div class="p-3 bg-indigo-50 rounded-xl border border-indigo-200 text-indigo-800 text-[11px] font-semibold flex items-center gap-2">
+                            <i class="bi bi-info-circle-fill text-indigo-600"></i>
+                            <span>Cette clé couvrira la boutique principale ainsi que ses <strong>{{ $boutique->filiales->count() }} filiale(s)</strong>.</span>
+                        </div>
+                    @endif
                     <div>
                         <div class="flex items-center justify-between mb-2">
                             <label class="block text-xs font-black uppercase tracking-widest text-slate-400">Durée de Validité</label>

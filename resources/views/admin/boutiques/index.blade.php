@@ -96,13 +96,29 @@
                                             {{ substr($boutique->nom, 0, 1) }}
                                         </div>
                                         <div>
-                                            <a href="{{ route('admin.boutiques.show', $boutique) }}" class="font-black text-slate-900 tracking-tight group-hover:text-brand-600 transition-colors boutique-name">
-                                                {{ $boutique->nom }}
-                                            </a>
-                                            <div class="flex items-center gap-2 mt-0.5">
+                                            <div class="flex items-center gap-2 flex-wrap">
+                                                <a href="{{ route('admin.boutiques.show', $boutique) }}" class="font-black text-slate-900 tracking-tight group-hover:text-brand-600 transition-colors boutique-name">
+                                                    {{ $boutique->nom }}
+                                                </a>
+                                                @if ($boutique->isFiliale())
+                                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200 text-[9px] font-black uppercase tracking-wider">
+                                                        <i class="bi bi-arrow-return-right"></i> Filiale
+                                                    </span>
+                                                @elseif ($boutique->filiales && $boutique->filiales->count() > 0)
+                                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200 text-[9px] font-black uppercase tracking-wider">
+                                                        <i class="bi bi-diagram-3-fill"></i> Principale ({{ $boutique->filiales->count() }} filiale{{ $boutique->filiales->count() > 1 ? 's' : '' }})
+                                                    </span>
+                                                @endif
+                                            </div>
+                                            <div class="flex items-center gap-2 mt-0.5 flex-wrap">
                                                 <span class="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[9px] font-black uppercase tracking-wider">
                                                     {{ $boutique->nature?->name ?? 'Commerce' }}
                                                 </span>
+                                                @if($boutique->isFiliale() && $boutique->parent)
+                                                    <span class="text-[10px] font-bold text-slate-500">
+                                                        de <span class="text-slate-700 font-black">{{ $boutique->parent->nom }}</span>
+                                                    </span>
+                                                @endif
                                                 <span class="text-[11px] font-semibold text-slate-400">
                                                     <i class="bi bi-geo-alt"></i> {{ $boutique->adresse }}
                                                 </span>
@@ -166,6 +182,11 @@
                                             </span>
                                             <p class="text-[10px] text-slate-400 font-semibold">{{ \Carbon\Carbon::parse($boutique->date_expiration_licence)->format('d/m/Y') }}</p>
                                         </div>
+                                    @endif
+                                    @if($boutique->isFiliale())
+                                        <p class="text-[9px] text-indigo-600 font-bold mt-1 flex items-center gap-1">
+                                            <i class="bi bi-link-45deg"></i> Synchronisée au groupe
+                                        </p>
                                     @endif
                                 </td>
 

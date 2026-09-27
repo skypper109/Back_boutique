@@ -47,22 +47,28 @@ class LicenceController extends Controller
             ], 404);
         }
 
-        // Si la clé est déjà active et toujours valide pour cette boutique, on confirme l'activation sans erreur
-        if ($licence->statut === 'active' && !$boutique->isLicenceExpired()) {
-            $formattedExp = $boutique->date_expiration_licence
-                ? Carbon::parse($boutique->date_expiration_licence)->format('d/m/Y à H:i')
+        // Toujours opérer sur la boutique principale (racine du groupe d'établissements)
+        $rootBoutique = $boutique->getRootBoutique();
+
+        // Si la clé est déjà active et toujours valide pour ce groupe de boutiques
+        if ($licence->statut === 'active' && !$rootBoutique->isLicenceExpired()) {
+            $formattedExp = $rootBoutique->date_expiration_licence
+                ? Carbon::parse($rootBoutique->date_expiration_licence)->format('d/m/Y à H:i')
                 : 'Accès permanent (À vie)';
+
+            $filialesCount = $rootBoutique->filiales()->count();
 
             return response()->json([
                 'success' => true,
                 'already_active' => true,
-                'message' => "Licence active confirmée pour la boutique « {$boutique->nom} » !",
-                'boutique_id' => $boutique->id,
-                'boutique_nom' => $boutique->nom,
-                'date_expiration' => $boutique->date_expiration_licence,
+                'message' => "Licence active confirmée pour le groupe « {$rootBoutique->nom} »" . ($filialesCount > 0 ? " et ses {$filialesCount} filiale(s) !" : " !"),
+                'boutique_id' => $rootBoutique->id,
+                'boutique_nom' => $rootBoutique->nom,
+                'date_expiration' => $rootBoutique->date_expiration_licence,
                 'date_expiration_formatee' => $formattedExp,
-                'is_unlimited' => $boutique->hasUnlimitedLicence(),
-                'jours_restants' => $boutique->joursRestants(),
+                'is_unlimited' => $rootBoutique->hasUnlimitedLicence(),
+                'jours_restants' => $rootBoutique->joursRestants(),
+                'filiales_count' => $filialesCount,
                 'jours_ajoutes' => 0,
             ], 200);
         }
@@ -74,46 +80,54 @@ class LicenceController extends Controller
             ], 400);
         }
 
-        DB::transaction(function () use ($licence, $boutique) {
+        DB::transaction(function () use ($licence, $rootBoutique) {
             $isUnlimited = $licence->duree_jours >= 90000;
 
             if ($isUnlimited) {
                 // Licence illimitée / à vie
                 $newExpiration = null;
             } else {
-                // Si la boutique a déjà une date d'expiration future, on prolonge à partir de cette date
-                $baseDate = ($boutique->date_expiration_licence && Carbon::parse($boutique->date_expiration_licence)->isFuture())
-                    ? Carbon::parse($boutique->date_expiration_licence)
+                // Si la boutique racine a déjà une date d'expiration future, on prolonge à partir de cette date
+                $baseDate = ($rootBoutique->date_expiration_licence && Carbon::parse($rootBoutique->date_expiration_licence)->isFuture())
+                    ? Carbon::parse($rootBoutique->date_expiration_licence)
                     : Carbon::now();
 
                 $newExpiration = $baseDate->addDays($licence->duree_jours);
             }
 
-            // Mettre à jour la licence
+            // Rattacher et activer la licence sur la boutique racine
+            $licence->boutique_id = $rootBoutique->id;
             $licence->statut = 'active';
             $licence->date_activation = Carbon::now();
             $licence->date_expiration = $newExpiration;
             $licence->save();
 
-            // Mettre à jour la boutique
-            $boutique->date_expiration_licence = $newExpiration;
-            $boutique->is_active = true;
-            $boutique->save();
+            // Mettre à jour la boutique principale
+            $rootBoutique->date_expiration_licence = $newExpiration;
+            $rootBoutique->is_active = true;
+            $rootBoutique->save();
+
+            // Synchroniser automatiquement l'ensemble des filiales du groupe !
+            $rootBoutique->syncLicenceToFiliales();
         });
 
-        $formattedExp = $boutique->date_expiration_licence
-            ? Carbon::parse($boutique->date_expiration_licence)->format('d/m/Y à H:i')
+        $formattedExp = $rootBoutique->date_expiration_licence
+            ? Carbon::parse($rootBoutique->date_expiration_licence)->format('d/m/Y à H:i')
             : 'Accès permanent (À vie)';
+
+        $filialesCount = $rootBoutique->filiales()->count();
+        $filialesMsg = $filialesCount > 0 ? " (et ses {$filialesCount} filiale(s))" : "";
 
         return response()->json([
             'success' => true,
-            'message' => "Licence activée avec succès pour la boutique « {$boutique->nom} » !",
-            'boutique_id' => $boutique->id,
-            'boutique_nom' => $boutique->nom,
-            'date_expiration' => $boutique->date_expiration_licence,
+            'message' => "Licence activée avec succès pour le groupe « {$rootBoutique->nom} »{$filialesMsg} !",
+            'boutique_id' => $rootBoutique->id,
+            'boutique_nom' => $rootBoutique->nom,
+            'date_expiration' => $rootBoutique->date_expiration_licence,
             'date_expiration_formatee' => $formattedExp,
             'is_unlimited' => $licence->duree_jours >= 90000,
-            'jours_restants' => $boutique->joursRestants(),
+            'jours_restants' => $rootBoutique->joursRestants(),
+            'filiales_count' => $filialesCount,
             'jours_ajoutes' => $licence->duree_jours,
         ], 200);
     }
@@ -129,15 +143,21 @@ class LicenceController extends Controller
             return response()->json(['error' => 'Boutique introuvable.'], 404);
         }
 
+        $root = $boutique->getRootBoutique();
+
         return response()->json([
             'boutique_id' => $boutique->id,
             'boutique_nom' => $boutique->nom,
-            'is_active' => (bool) $boutique->is_active,
-            'is_expired' => $boutique->isLicenceExpired(),
-            'is_unlimited' => $boutique->hasUnlimitedLicence(),
-            'date_expiration' => $boutique->date_expiration_licence,
-            'date_expiration_formatee' => $boutique->date_expiration_licence ? \Carbon\Carbon::parse($boutique->date_expiration_licence)->format('d/m/Y') : null,
-            'jours_restants' => $boutique->joursRestants(),
+            'root_boutique_id' => $root->id,
+            'root_boutique_nom' => $root->nom,
+            'is_filiale' => $boutique->isFiliale(),
+            'is_active' => (bool) $root->is_active,
+            'is_expired' => $root->isLicenceExpired(),
+            'is_unlimited' => $root->hasUnlimitedLicence(),
+            'date_expiration' => $root->date_expiration_licence,
+            'date_expiration_formatee' => $root->date_expiration_licence ? \Carbon\Carbon::parse($root->date_expiration_licence)->format('d/m/Y') : null,
+            'jours_restants' => $root->joursRestants(),
+            'filiales_count' => $root->filiales()->count(),
         ], 200);
     }
 }

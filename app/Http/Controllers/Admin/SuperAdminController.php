@@ -45,7 +45,7 @@ class SuperAdminController extends Controller
 
     public function boutiquesIndex()
     {
-        $boutiques = Boutique::with(['creator', 'nature', 'licences'])->get();
+        $boutiques = Boutique::with(['creator', 'nature', 'licences', 'parent', 'filiales'])->get();
         $natures = Nature::where('is_active', true)->get();
         return view('admin.boutiques.index', compact('boutiques', 'natures'));
     }
@@ -72,7 +72,7 @@ class SuperAdminController extends Controller
             ->limit(10)
             ->get();
 
-        $boutique->load(['licences.creator', 'creator']);
+        $boutique->load(['licences.creator', 'creator', 'parent', 'filiales']);
 
         return view('admin.boutiques.show', compact('boutique', 'salesCount', 'totalRevenue', 'topProducts', 'recentSales'));
     }
@@ -176,8 +176,15 @@ class SuperAdminController extends Controller
         $boutique->is_active = !$boutique->is_active;
         $boutique->save();
 
+        if (!$boutique->isFiliale()) {
+            $boutique->filiales()->update(['is_active' => $boutique->is_active]);
+        }
+
         $status = $boutique->is_active ? 'activée' : 'désactivée';
-        return back()->with('success', "La boutique {$boutique->nom} a été {$status} avec succès.");
+        $extra = (!$boutique->isFiliale() && $boutique->filiales()->count() > 0)
+            ? " ainsi que toutes ses filiales ({$boutique->filiales()->count()})"
+            : "";
+        return back()->with('success', "La boutique {$boutique->nom} a été {$status}{$extra} avec succès.");
     }
 
     public function userStore(Request $request, Boutique $boutique)
@@ -250,7 +257,7 @@ class SuperAdminController extends Controller
         }
 
         $licences = $query->paginate(20);
-        $boutiques = Boutique::orderBy('nom')->get();
+        $boutiques = Boutique::with(['filiales', 'parent'])->orderBy('nom')->get();
 
         $stats = [
             'total' => Licence::count(),
@@ -264,7 +271,7 @@ class SuperAdminController extends Controller
     }
 
     /**
-     * Génère une nouvelle clé d'activation pour une boutique
+     * Génère une nouvelle clé d'activation pour une boutique (ou son groupe)
      */
     public function licenceStore(Request $request)
     {
@@ -278,10 +285,14 @@ class SuperAdminController extends Controller
             'note' => 'nullable|string|max:255',
         ]);
 
+        $targetBoutique = Boutique::find($request->boutique_id);
+        $rootBoutique = $targetBoutique ? $targetBoutique->getRootBoutique() : null;
+        $boutiqueId = $rootBoutique ? $rootBoutique->id : $request->boutique_id;
+
         $cle = Licence::generateKey();
 
         Licence::create([
-            'boutique_id' => $request->boutique_id,
+            'boutique_id' => $boutiqueId,
             'cle_licence' => $cle,
             'duree_jours' => $request->duree_jours,
             'statut' => 'inutilisee',
@@ -289,20 +300,21 @@ class SuperAdminController extends Controller
             'note' => $request->note,
         ]);
 
-        $boutique = Boutique::find($request->boutique_id);
-
+        $boutique = $rootBoutique ?: $targetBoutique;
         $dureeLabel = $request->duree_jours >= 90000 ? 'À vie (Illimité)' : "{$request->duree_jours} jours";
+        $filialesCount = $boutique->filiales()->count();
+        $groupeMsg = $filialesCount > 0 ? " (valable pour la boutique principale et ses {$filialesCount} filiale(s))" : "";
 
         return back()->with('success_cle', [
             'cle' => $cle,
             'boutique' => $boutique->nom,
             'duree' => $dureeLabel,
-            'message' => "Nouvelle clé d'activation générée avec succès pour « {$boutique->nom} » !"
+            'message' => "Nouvelle clé d'activation générée avec succès pour « {$boutique->nom} »{$groupeMsg} !"
         ]);
     }
 
     /**
-     * Prolonge directement l'abonnement d'une boutique sans que le client ait besoin de saisir une clé
+     * Prolonge directement l'abonnement d'une boutique et de l'ensemble de son groupe
      */
     public function licenceProlongerDirect(Request $request, Boutique $boutique)
     {
@@ -315,25 +327,31 @@ class SuperAdminController extends Controller
             'note' => 'nullable|string|max:255',
         ]);
 
+        // Toujours prolonger la boutique racine du groupe
+        $rootBoutique = $boutique->getRootBoutique();
+
         $duree = (int) $request->duree_jours;
         $isUnlimited = $duree >= 90000;
 
         if ($isUnlimited) {
             $newExpiration = null;
         } else {
-            $base = ($boutique->date_expiration_licence && Carbon::parse($boutique->date_expiration_licence)->isFuture())
-                ? Carbon::parse($boutique->date_expiration_licence)
+            $base = ($rootBoutique->date_expiration_licence && Carbon::parse($rootBoutique->date_expiration_licence)->isFuture())
+                ? Carbon::parse($rootBoutique->date_expiration_licence)
                 : Carbon::now();
             $newExpiration = $base->addDays($duree);
         }
 
-        $boutique->date_expiration_licence = $newExpiration;
-        $boutique->is_active = true;
-        $boutique->save();
+        $rootBoutique->date_expiration_licence = $newExpiration;
+        $rootBoutique->is_active = true;
+        $rootBoutique->save();
 
-        // Enregistrer une licence active dans l'historique
+        // Synchroniser immédiatement toutes les filiales
+        $rootBoutique->syncLicenceToFiliales();
+
+        // Enregistrer une licence active dans l'historique sur la boutique racine
         Licence::create([
-            'boutique_id' => $boutique->id,
+            'boutique_id' => $rootBoutique->id,
             'cle_licence' => Licence::generateKey(),
             'duree_jours' => $duree,
             'statut' => 'active',
@@ -343,9 +361,12 @@ class SuperAdminController extends Controller
             'note' => $request->note ?: 'Prolongation directe par le SuperAdmin',
         ]);
 
+        $filialesCount = $rootBoutique->filiales()->count();
+        $groupeMsg = $filialesCount > 0 ? " (et ses {$filialesCount} filiale(s) associées)" : "";
+
         $msg = $isUnlimited
-            ? "La boutique « {$boutique->nom} » a été activée à vie avec succès !"
-            : "La boutique « {$boutique->nom} » a été prolongée jusqu'au " . $newExpiration->format('d/m/Y') . " (+{$duree} jours).";
+            ? "Le groupe « {$rootBoutique->nom} »{$groupeMsg} a été activé à vie avec succès !"
+            : "Le groupe « {$rootBoutique->nom} »{$groupeMsg} a été prolongé jusqu'au " . $newExpiration->format('d/m/Y') . " (+{$duree} jours).";
 
         return back()->with('success', $msg);
     }

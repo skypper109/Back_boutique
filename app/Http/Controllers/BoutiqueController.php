@@ -144,7 +144,21 @@ class BoutiqueController extends Controller
             }
 
             $fields['user_id'] = $user->id;
-            $fields['is_active'] = true;
+
+            // Rattachement automatique comme filiale si l'admin possède déjà une boutique principale
+            $primaryBoutiqueId = $user->boutique_id ?: Boutique::where('user_id', $user->id)->whereNull('parent_id')->value('id');
+            if ($primaryBoutiqueId) {
+                $primaryBoutique = Boutique::find($primaryBoutiqueId);
+                if ($primaryBoutique) {
+                    $fields['parent_id'] = $primaryBoutique->id;
+                    $fields['is_active'] = $primaryBoutique->is_active;
+                    $fields['date_expiration_licence'] = $primaryBoutique->date_expiration_licence;
+                } else {
+                    $fields['is_active'] = true;
+                }
+            } else {
+                $fields['is_active'] = true;
+            }
 
             \Illuminate\Support\Facades\Log::info('Creating boutique with fields:', $fields);
 
@@ -205,7 +219,22 @@ class BoutiqueController extends Controller
                 // 3. Create Boutique
                 $boutiqueFields = $request->input('boutique');
                 $boutiqueFields['user_id'] = $user->id; // The admin who created it
-                $boutiqueFields['is_active'] = true;
+
+                // Rattachement automatique comme filiale si l'admin possède déjà une boutique principale
+                $primaryBoutiqueId = $user->boutique_id ?: Boutique::where('user_id', $user->id)->whereNull('parent_id')->value('id');
+                if ($primaryBoutiqueId) {
+                    $primaryBoutique = Boutique::find($primaryBoutiqueId);
+                    if ($primaryBoutique) {
+                        $boutiqueFields['parent_id'] = $primaryBoutique->id;
+                        $boutiqueFields['is_active'] = $primaryBoutique->is_active;
+                        $boutiqueFields['date_expiration_licence'] = $primaryBoutique->date_expiration_licence;
+                    } else {
+                        $boutiqueFields['is_active'] = true;
+                    }
+                } else {
+                    $boutiqueFields['is_active'] = true;
+                }
+
                 $boutique = Boutique::create($boutiqueFields);
 
                 // 3. Create Manager User

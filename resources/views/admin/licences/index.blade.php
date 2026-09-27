@@ -120,7 +120,16 @@
                 <select name="boutique_id" onchange="this.form.submit()" class="bg-white border border-slate-200 rounded-xl text-xs font-bold py-2.5 px-3.5 focus:ring-2 focus:ring-brand-500 outline-none shadow-sm">
                     <option value="">Toutes les Boutiques</option>
                     @foreach($boutiques as $b)
-                        <option value="{{ $b->id }}" {{ request('boutique_id') == $b->id ? 'selected' : '' }}>{{ $b->nom }}</option>
+                        @php
+                            $filialesCount = $b->filiales ? $b->filiales->count() : 0;
+                            $label = $b->nom;
+                            if ($b->isFiliale()) {
+                                $label .= ' [Filiale de ' . ($b->parent?->nom ?? 'Principale') . ']';
+                            } elseif ($filialesCount > 0) {
+                                $label .= " [Groupe : Principale + {$filialesCount} filiale" . ($filialesCount > 1 ? 's' : '') . "]";
+                            }
+                        @endphp
+                        <option value="{{ $b->id }}" {{ request('boutique_id') == $b->id ? 'selected' : '' }}>{{ $label }}</option>
                     @endforeach
                 </select>
 
@@ -169,6 +178,15 @@
                                 <a href="{{ route('admin.boutiques.show', $licence->boutique) }}" class="font-black text-xs text-slate-900 hover:text-brand-600 transition-colors">
                                     {{ $licence->boutique?->nom ?? 'Inconnue' }}
                                 </a>
+                                @if($licence->boutique && $licence->boutique->filiales && $licence->boutique->filiales->count() > 0)
+                                    <div class="text-[10px] text-brand-600 font-bold mt-0.5 flex items-center gap-1">
+                                        <i class="bi bi-diagram-3-fill"></i> Groupe (+{{ $licence->boutique->filiales->count() }} filiale{{ $licence->boutique->filiales->count() > 1 ? 's' : '' }})
+                                    </div>
+                                @elseif($licence->boutique && $licence->boutique->isFiliale())
+                                    <div class="text-[10px] text-amber-600 font-bold mt-0.5 flex items-center gap-1">
+                                        <i class="bi bi-arrow-return-right"></i> Filiale de {{ $licence->boutique->parent?->nom ?? 'Principale' }}
+                                    </div>
+                                @endif
                             </td>
 
                             <td class="px-8 py-5">
@@ -274,13 +292,26 @@
         <form action="{{ route('admin.licences.store') }}" method="POST" class="space-y-4">
             @csrf
             <div>
-                <label class="block text-xs font-black uppercase tracking-widest text-slate-400 mb-2">Boutique Bénéficiaire</label>
+                <label class="block text-xs font-black uppercase tracking-widest text-slate-400 mb-2">Boutique Bénéficiaire (ou Groupe)</label>
                 <select name="boutique_id" required class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none">
                     <option value="">Sélectionner un établissement</option>
                     @foreach($boutiques as $b)
-                        <option value="{{ $b->id }}">{{ $b->nom }}</option>
+                        @php
+                            $filialesCount = $b->filiales ? $b->filiales->count() : 0;
+                            $label = $b->nom;
+                            if ($b->isFiliale()) {
+                                $label .= ' (Filiale -> Rattachée à ' . ($b->parent?->nom ?? 'Principale') . ')';
+                            } elseif ($filialesCount > 0) {
+                                $label .= " [Groupe : Principale + {$filialesCount} filiale" . ($filialesCount > 1 ? 's' : '') . "]";
+                            }
+                        @endphp
+                        <option value="{{ $b->id }}">{{ $label }}</option>
                     @endforeach
                 </select>
+                <p class="text-[11px] text-slate-400 font-medium mt-1 flex items-center gap-1.5">
+                    <i class="bi bi-info-circle text-brand-600"></i>
+                    La clé sera rattachée à la boutique principale et activera automatiquement toutes ses filiales.
+                </p>
             </div>
 
             <div>
@@ -358,19 +389,32 @@
         </div>
 
         <p class="text-xs text-slate-500 font-semibold mb-4">
-            Cette action prolonge directement la date d'échéance de la boutique sélectionnée sans nécessiter la saisie manuelle d'une clé par le gérant.
+            Cette action prolonge directement la date d'échéance de la boutique sélectionnée (et de toutes ses filiales) sans nécessiter la saisie manuelle d'une clé.
         </p>
 
         <form id="formProlongerDirect" method="POST" action="" class="space-y-4">
             @csrf
             <div>
-                <label class="block text-xs font-black uppercase tracking-widest text-slate-400 mb-2">Boutique Cible</label>
+                <label class="block text-xs font-black uppercase tracking-widest text-slate-400 mb-2">Boutique Cible (ou Groupe)</label>
                 <select id="selectBoutiqueProlonger" onchange="updateProlongAction(this.value)" required class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none">
                     <option value="">Sélectionner une boutique</option>
                     @foreach($boutiques as $b)
-                        <option value="{{ $b->id }}">{{ $b->nom }}</option>
+                        @php
+                            $filialesCount = $b->filiales ? $b->filiales->count() : 0;
+                            $label = $b->nom;
+                            if ($b->isFiliale()) {
+                                $label .= ' (Filiale -> Rattachée à ' . ($b->parent?->nom ?? 'Principale') . ')';
+                            } elseif ($filialesCount > 0) {
+                                $label .= " [Groupe : Principale + {$filialesCount} filiale" . ($filialesCount > 1 ? 's' : '') . "]";
+                            }
+                        @endphp
+                        <option value="{{ $b->id }}">{{ $label }}</option>
                     @endforeach
                 </select>
+                <p class="text-[11px] text-slate-400 font-medium mt-1 flex items-center gap-1.5">
+                    <i class="bi bi-check-circle text-emerald-600"></i>
+                    La prolongation s'appliquera automatiquement à la boutique et à toutes ses filiales.
+                </p>
             </div>
 
             <div>

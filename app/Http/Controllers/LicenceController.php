@@ -38,13 +38,6 @@ class LicenceController extends Controller
             ], 403);
         }
 
-        if ($licence->statut === 'active' || $licence->statut === 'expiree') {
-            return response()->json([
-                'error' => 'already_used',
-                'message' => 'Cette clé d\'activation a déjà été utilisée le ' . ($licence->date_activation ? $licence->date_activation->format('d/m/Y') : '') . '.'
-            ], 400);
-        }
-
         $boutique = Boutique::find($licence->boutique_id);
 
         if (!$boutique) {
@@ -52,6 +45,33 @@ class LicenceController extends Controller
                 'error' => 'boutique_not_found',
                 'message' => 'L\'établissement associé à cette clé n\'a pas été trouvé.'
             ], 404);
+        }
+
+        // Si la clé est déjà active et toujours valide pour cette boutique, on confirme l'activation sans erreur
+        if ($licence->statut === 'active' && !$boutique->isLicenceExpired()) {
+            $formattedExp = $boutique->date_expiration_licence
+                ? Carbon::parse($boutique->date_expiration_licence)->format('d/m/Y à H:i')
+                : 'Accès permanent (À vie)';
+
+            return response()->json([
+                'success' => true,
+                'already_active' => true,
+                'message' => "Licence active confirmée pour la boutique « {$boutique->nom} » !",
+                'boutique_id' => $boutique->id,
+                'boutique_nom' => $boutique->nom,
+                'date_expiration' => $boutique->date_expiration_licence,
+                'date_expiration_formatee' => $formattedExp,
+                'is_unlimited' => $boutique->hasUnlimitedLicence(),
+                'jours_restants' => $boutique->joursRestants(),
+                'jours_ajoutes' => 0,
+            ], 200);
+        }
+
+        if ($licence->statut === 'active' || $licence->statut === 'expiree') {
+            return response()->json([
+                'error' => 'already_used',
+                'message' => 'Cette clé d\'activation a déjà été utilisée le ' . ($licence->date_activation ? $licence->date_activation->format('d/m/Y') : '') . '.'
+            ], 400);
         }
 
         DB::transaction(function () use ($licence, $boutique) {
@@ -93,16 +113,17 @@ class LicenceController extends Controller
             'date_expiration' => $boutique->date_expiration_licence,
             'date_expiration_formatee' => $formattedExp,
             'is_unlimited' => $licence->duree_jours >= 90000,
+            'jours_restants' => $boutique->joursRestants(),
             'jours_ajoutes' => $licence->duree_jours,
         ], 200);
     }
 
     /**
-     * Récupère l'état de la licence d'une boutique
+     * Récupère l'état de la licence d'une boutique (ou boutique courante/première si non spécifiée)
      */
-    public function statut(Request $request, $boutique_id)
+    public function statut(Request $request, $boutique_id = null)
     {
-        $boutique = Boutique::find($boutique_id);
+        $boutique = $boutique_id ? Boutique::find($boutique_id) : Boutique::first();
 
         if (!$boutique) {
             return response()->json(['error' => 'Boutique introuvable.'], 404);

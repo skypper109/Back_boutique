@@ -22,7 +22,7 @@ Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanc
 
 // Licences & Abonnements Routes
 Route::post('/licences/activer', [LicenceController::class, 'activer']);
-Route::get('/licences/statut/{boutique_id}', [LicenceController::class, 'statut']);
+Route::get('/licences/statut/{boutique_id?}', [LicenceController::class, 'statut']);
 
 // User and Boutique Status Check Routes (must be authenticated)
 Route::middleware('auth:sanctum')->group(function () {
